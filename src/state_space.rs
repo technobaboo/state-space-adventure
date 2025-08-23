@@ -1,6 +1,6 @@
 use crate::board::{Block, Board};
 use asteroids::{
-	elements::{line_from_points, lines, shape, Handle, LineExt, Lines, Spatial},
+	elements::{line_from_points, shape, Handle, LineExt, Lines, Spatial},
 	CustomElement, Reify, Transformable,
 };
 use glam::{vec3a, Vec3A};
@@ -208,11 +208,21 @@ impl<const ROWS: usize, const COLS: usize> Reify for StateSpace<ROWS, COLS> {
 						.build()
 					}),
 			)
-			.children(self.states.node_references().map(|(idx, d)| {
-				Handle::new(d.pos, move |state: &mut Self, pos| {
-					state.states.node_weight_mut(idx).unwrap().pos = pos.into();
-				})
-				.build()
-			}))
+			.children(
+				(self.state_count() < 25)
+					.then(|| {
+						self.states
+							.node_references()
+							.map(|(idx, d)| {
+								Handle::new(d.pos, move |state: &mut Self, pos| {
+									state.states.node_weight_mut(idx).unwrap().pos = pos.into();
+								})
+								.build()
+							})
+							.collect::<Vec<_>>()
+					})
+					.into_iter()
+					.flatten(),
+			)
 	}
 }
