@@ -1,6 +1,6 @@
 use asteroids::{
 	elements::{Spatial, Text},
-	ClientState, CustomElement, Migrate, Reify, Transformable,
+	ClientState, CustomElement, FrameWarning, Migrate, Reify, Transformable,
 };
 use board::{Block, Board, Cell};
 use serde::{Deserialize, Serialize};
@@ -21,6 +21,8 @@ async fn main() {
 pub struct State {
 	board: Board<5, 4>,
 	states: StateSpace<5, 4>,
+	#[serde(skip)]
+	frame_warning: FrameWarning,
 }
 impl Default for State {
 	fn default() -> Self {
@@ -113,6 +115,7 @@ impl Default for State {
 		Self {
 			states: StateSpace::new(board.clone()),
 			board,
+			frame_warning: FrameWarning::default(),
 		}
 	}
 }
@@ -130,6 +133,8 @@ impl ClientState for State {
 			}
 		}
 		self.states.force_direct(info);
+
+		self.frame_warning.update(info);
 	}
 }
 impl Reify for State {
@@ -158,5 +163,22 @@ impl Reify for State {
 				.character_height(0.005)
 				.build(),
 			)
+			.maybe_child(self.frame_warning.danger().then(|| {
+				let (delta, real_delta) = self.frame_warning.times();
+				Text::new(format!(
+					"frametime suuucks: {:.2}ms server vs {:.2}ms client",
+					delta * 1000.0,
+					real_delta * 1000.0
+				))
+				.text_align_y(YAlign::Top)
+				.color(rgba_linear!(0.75, 0.1, 0.1, 1.0))
+				.pos([-0.02, 0.0, 0.0])
+				.rot(
+					glam::Quat::from_rotation_y(std::f32::consts::PI)
+						* glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+				)
+				.character_height(0.005)
+				.build()
+			}))
 	}
 }
