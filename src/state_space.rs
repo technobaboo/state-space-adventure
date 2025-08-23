@@ -34,10 +34,10 @@ pub struct NodeData<N> {
 pub struct EdgeData(Color);
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct StateSpace<const WIDTH: usize, const HEIGHT: usize> {
+pub struct StateSpace {
 	current: NodeIndex<u32>,
 	map: HashMap<u64, NodeIndex<u32>>,
-	states: StableUnGraph<NodeData<Board<WIDTH, HEIGHT>>, EdgeData>,
+	states: StableUnGraph<NodeData<Board>, EdgeData>,
 
 	pub settle_speed: f32,
 
@@ -49,8 +49,8 @@ pub struct StateSpace<const WIDTH: usize, const HEIGHT: usize> {
 	/// Higher scale values spread nodes farther apart.
 	pub scale: f32,
 }
-impl<const WIDTH: usize, const HEIGHT: usize> StateSpace<WIDTH, HEIGHT> {
-	pub fn new(board: Board<WIDTH, HEIGHT>) -> Self {
+impl StateSpace {
+	pub fn new(board: Board) -> Self {
 		let hash = board.board_hash();
 		let mut states = StableUnGraph::default();
 		let idx = states.add_node(NodeData {
@@ -70,7 +70,7 @@ impl<const WIDTH: usize, const HEIGHT: usize> StateSpace<WIDTH, HEIGHT> {
 			scale: 0.025,
 		}
 	}
-	pub fn add(&mut self, board: &Board<WIDTH, HEIGHT>, block: &Block) {
+	pub fn add(&mut self, board: &Board, block: &Block) {
 		let hash = board.board_hash();
 		if let Some(&idx) = self.map.get(&hash) {
 			self.link_to_node(idx, EdgeData(block.color));
@@ -177,7 +177,7 @@ impl<const WIDTH: usize, const HEIGHT: usize> StateSpace<WIDTH, HEIGHT> {
 		}
 	}
 }
-impl<const WIDTH: usize, const HEIGHT: usize> Reify for StateSpace<WIDTH, HEIGHT> {
+impl Reify for StateSpace {
 	fn reify(&self) -> impl asteroids::Element<Self> {
 		Spatial::default()
 			.build()

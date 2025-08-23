@@ -2,7 +2,7 @@ use asteroids::{
 	elements::{Dial, Spatial, Text},
 	ClientState, CustomElement, FrameWarning, Migrate, Reify, Transformable,
 };
-use board::{Block, Board, Cell};
+use board::{Block, Board};
 use serde::{Deserialize, Serialize};
 use stardust_xr_fusion::{
 	drawable::YAlign, project_local_resources, root::FrameInfo, values::color::rgba_linear,
@@ -19,61 +19,63 @@ async fn main() {
 
 #[derive(Serialize, Deserialize)] // Defining variables used in client
 pub struct State {
-	board: Board<7, 7>,
-	states: StateSpace<7, 7>,
+	board: Board,
+	states: StateSpace,
 	#[serde(skip)]
 	frame_warning: FrameWarning,
 }
 impl Default for State {
 	fn default() -> Self {
 		let board = Board::new(
+			7,
+			7,
 			vec![
 				Block {
 					label: 'M', // magenta
 					color: rgba_linear!(0.9, 0.1, 0.6, 1.0),
-					top_left: Cell { row: 0, col: 1 },
+					top_left: [1, 0].into(),
 					width: 3,
 					height: 1,
 				},
 				Block {
 					label: 'P', // purple
 					color: rgba_linear!(0.5, 0.1, 0.9, 1.0),
-					top_left: Cell { row: 0, col: 6 },
+					top_left: [6, 0].into(),
 					width: 1,
 					height: 2,
 				},
 				Block {
 					label: 'R', // red
 					color: rgba_linear!(0.9, 0.2, 0.2, 1.0),
-					top_left: Cell { row: 1, col: 2 },
+					top_left: [2, 1].into(),
 					width: 1,
 					height: 3,
 				},
 				Block {
 					label: 'G', // green
 					color: rgba_linear!(0.1, 0.9, 0.1, 1.0),
-					top_left: Cell { row: 2, col: 0 },
+					top_left: [0, 2].into(),
 					width: 2,
 					height: 1,
 				},
 				Block {
 					label: 'O', // orange
 					color: rgba_linear!(0.9, 0.6, 0.1, 1.0),
-					top_left: Cell { row: 3, col: 0 },
+					top_left: [0, 3].into(),
 					width: 2,
 					height: 1,
 				},
 				Block {
 					label: 'T', // teal
 					color: rgba_linear!(0.1, 0.8, 0.8, 1.0),
-					top_left: Cell { row: 2, col: 6 },
+					top_left: [6, 2].into(),
 					width: 1,
 					height: 3,
 				},
 				Block {
 					label: 'B', // blue
 					color: rgba_linear!(0.1, 0.3, 0.9, 1.0),
-					top_left: Cell { row: 6, col: 2 },
+					top_left: [2, 6].into(),
 					width: 3,
 					height: 1,
 				},

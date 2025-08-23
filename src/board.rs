@@ -7,18 +7,14 @@ use rand::{rng, seq::IteratorRandom};
 use serde::{Deserialize, Serialize};
 use stardust_xr_fusion::{
 	drawable::{Line, LinePoint},
-	values::{color::rgba_linear, Color},
+	values::{color::rgba_linear, Color, Vector2},
 };
 use std::{
 	collections::{HashMap, HashSet},
 	hash::{DefaultHasher, Hash, Hasher},
 };
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Cell {
-	pub row: usize,
-	pub col: usize,
-}
+pub type Cell = Vector2<usize>;
 
 /// Represents a block on the board.
 /// The block occupies a contiguous rectangle defined by top-left cell, width and height.
@@ -33,26 +29,26 @@ pub struct Block {
 impl Block {
 	fn cells(&self) -> HashSet<Cell> {
 		let mut set = HashSet::new();
-		for r in self.top_left.row..self.top_left.row + self.height {
-			for c in self.top_left.col..self.top_left.col + self.width {
-				set.insert(Cell { row: r, col: c });
+		for r in self.top_left.y..self.top_left.y + self.height {
+			for c in self.top_left.x..self.top_left.x + self.width {
+				set.insert(Cell { y: r, x: c });
 			}
 		}
 		set
 	}
 
-	fn moved(&self, delta_row: isize, delta_col: isize) -> Option<Block> {
-		let new_row = (self.top_left.row as isize).checked_add(delta_row)?;
-		let new_col = (self.top_left.col as isize).checked_add(delta_col)?;
-		if new_row < 0 || new_col < 0 {
+	fn moved(&self, delta_x: isize, delta_y: isize) -> Option<Block> {
+		let new_x = (self.top_left.x as isize).checked_add(delta_x)?;
+		let new_y = (self.top_left.y as isize).checked_add(delta_y)?;
+		if new_x < 0 || new_y < 0 {
 			return None;
 		}
 		Some(Block {
 			label: self.label,
 			color: self.color,
 			top_left: Cell {
-				row: new_row as usize,
-				col: new_col as usize,
+				x: new_x as usize,
+				y: new_y as usize,
 			},
 			width: self.width,
 			height: self.height,
@@ -80,11 +76,13 @@ impl Hash for Block {
 
 /// Klotski board with dimensions as const generics.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Board<const WIDTH: usize, const HEIGHT: usize> {
+pub struct Board {
+	width: usize,
+	height: usize,
 	blocks: HashMap<char, Block>,
 	pinned: bool,
 }
-impl<const WIDTH: usize, const HEIGHT: usize> Hash for Board<WIDTH, HEIGHT> {
+impl Hash for Board {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		let mut blocks = self.blocks.values().collect::<Vec<_>>();
 		blocks.sort_by_key(|block| block.label);
@@ -93,20 +91,23 @@ impl<const WIDTH: usize, const HEIGHT: usize> Hash for Board<WIDTH, HEIGHT> {
 		}
 	}
 }
-impl<const WIDTH: usize, const HEIGHT: usize> Board<WIDTH, HEIGHT> {
+impl Board {
 	/// Creates a new board ensuring constraints are satisfied:
 	/// - All blocks fit inside the board
 	/// - No blocks overlap
-	pub fn new(blocks: Vec<Block>, pinned: bool) -> Result<Self, String> {
-		if HEIGHT == 0 || WIDTH == 0 {
+	pub fn new(
+		width: usize,
+		height: usize,
+		blocks: Vec<Block>,
+		pinned: bool,
+	) -> Result<Self, String> {
+		if width == 0 || height == 0 {
 			return Err("Board dimensions must be > 0".to_string());
 		}
 
 		// Check blocks fit
 		for block in &blocks {
-			if block.top_left.row + block.height > HEIGHT
-				|| block.top_left.col + block.width > WIDTH
-			{
+			if block.top_left.x + block.width > width || block.top_left.y + block.height > height {
 				return Err(format!("Block '{}' out of board bounds", block.label));
 			}
 		}
@@ -122,17 +123,19 @@ impl<const WIDTH: usize, const HEIGHT: usize> Board<WIDTH, HEIGHT> {
 		}
 
 		Ok(Board {
+			width,
+			height,
 			blocks: blocks.into_iter().map(|b| (b.label, b)).collect(),
 			pinned,
 		})
 	}
 
 	/// Checks if move is valid for the given block label.
-	pub fn can_move(&self, label: char, delta_row: isize, delta_col: isize) -> bool {
-		if delta_row.abs() > 0 && delta_col.abs() > 0 {
+	pub fn can_move(&self, label: char, delta_x: isize, delta_y: isize) -> bool {
+		if delta_x.abs() > 0 && delta_y.abs() > 0 {
 			return false;
 		}
-		if delta_row.abs() > 2 || delta_col.abs() > 2 {
+		if delta_x.abs() > 2 || delta_y.abs() > 2 {
 			return false;
 		}
 
@@ -142,17 +145,16 @@ impl<const WIDTH: usize, const HEIGHT: usize> Board<WIDTH, HEIGHT> {
 
 		// if pinned, don't let anything move on a side with length greater than 1
 		if self.pinned
-			&& ((block.width > 1 && delta_row.abs() > 0)
-				|| (block.height > 1 && delta_col.abs() > 0))
+			&& ((block.height > 1 && delta_x.abs() > 0) || (block.width > 1 && delta_y.abs() > 0))
 		{
 			return false;
 		}
 
-		if let Some(moved_block) = block.moved(delta_row, delta_col) {
-			if moved_block.top_left.row + moved_block.height > HEIGHT {
+		if let Some(moved_block) = block.moved(delta_x, delta_y) {
+			if moved_block.top_left.x + moved_block.width > self.width {
 				return false;
 			}
-			if moved_block.top_left.col + moved_block.width > WIDTH {
+			if moved_block.top_left.y + moved_block.height > self.height {
 				return false;
 			}
 			// Check overlaps
@@ -175,14 +177,14 @@ impl<const WIDTH: usize, const HEIGHT: usize> Board<WIDTH, HEIGHT> {
 	pub fn move_block(
 		&mut self,
 		label: char,
-		delta_row: isize,
-		delta_col: isize,
+		delta_x: isize,
+		delta_y: isize,
 	) -> Result<(), String> {
-		if !self.can_move(label, delta_row, delta_col) {
+		if !self.can_move(label, delta_x, delta_y) {
 			return Err(format!("Invalid move for block '{label}'"));
 		}
 		let block = self.blocks.get(&label).cloned().unwrap();
-		let moved_block = block.moved(delta_row, delta_col).unwrap();
+		let moved_block = block.moved(delta_x, delta_y).unwrap();
 		self.blocks.insert(label, moved_block);
 		Ok(())
 	}
@@ -197,23 +199,23 @@ impl<const WIDTH: usize, const HEIGHT: usize> Board<WIDTH, HEIGHT> {
 	pub fn random_move(&mut self) -> Option<Block> {
 		let mut rng = rng();
 
-		// Directions to try for moves: (delta_row, delta_col)
-		let directions: &[(isize, isize)] = &[(-1, 0), (1, 0), (0, -1), (0, 1)];
+		// Directions to try for moves: (delta_x, delta_y)
+		let directions: &[(isize, isize)] = &[(0, -1), (0, 1), (-1, 0), (1, 0)];
 
-		// Generate all possible valid moves as (block_label, delta_row, delta_col)
+		// Generate all possible valid moves as (block_label, delta_x, delta_y)
 		let mut moves = Vec::new();
 		for &label in self.blocks.keys() {
-			for &(dr, dc) in directions {
-				if self.can_move(label, dr, dc) {
-					moves.push((label, dr, dc));
+			for &(dx, dy) in directions {
+				if self.can_move(label, dx, dy) {
+					moves.push((label, dx, dy));
 				}
 			}
 		}
 
 		// Pick one at random and perform it
-		if let Some(&(label, dr, dc)) = moves.iter().choose(&mut rng) {
+		if let Some(&(label, dx, dy)) = moves.iter().choose(&mut rng) {
 			// We unwrap here because we already validated with can_move
-			self.move_block(label, dr, dc).unwrap();
+			self.move_block(label, dx, dy).unwrap();
 			self.blocks.get(&label).cloned()
 		} else {
 			None
@@ -240,8 +242,8 @@ impl<const WIDTH: usize, const HEIGHT: usize> Board<WIDTH, HEIGHT> {
 			.color(color)
 			.transform(Mat4::from_translation(vec3(padding, -padding, 0.0)))])
 		.pos([
-			(top_left.col as f32 * CELL_SIZE),
-			-(top_left.row as f32 * CELL_SIZE),
+			(top_left.x as f32 * CELL_SIZE),
+			-(top_left.y as f32 * CELL_SIZE),
 			0.0,
 		])
 	}
@@ -250,12 +252,12 @@ impl<const WIDTH: usize, const HEIGHT: usize> Board<WIDTH, HEIGHT> {
 const CELL_SIZE: f32 = 0.02;
 const PADDING: f32 = 0.0025;
 
-impl<const WIDTH: usize, const HEIGHT: usize> Reify for Board<WIDTH, HEIGHT> {
+impl Reify for Board {
 	fn reify(&self) -> impl asteroids::Element<Self> {
 		Self::rectangle_lines(
-			Cell::default(),
-			WIDTH,
-			HEIGHT,
+			[0; 2].into(),
+			self.width,
+			self.height,
 			-PADDING,
 			rgba_linear!(1.0, 1.0, 1.0, 1.0),
 		)
