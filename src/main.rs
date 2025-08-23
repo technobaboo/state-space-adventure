@@ -1,7 +1,7 @@
 use asteroids::{elements::Spatial, ClientState, CustomElement, Migrate, Reify, Transformable};
 use board::{Block, Board, Cell};
 use serde::{Deserialize, Serialize};
-use stardust_xr_fusion::{project_local_resources, values::color::rgba_linear};
+use stardust_xr_fusion::{project_local_resources, root::FrameInfo, values::color::rgba_linear};
 use state_space::StateSpace;
 
 mod board;
@@ -115,12 +115,12 @@ impl Migrate for State {
 impl ClientState for State {
 	const APP_ID: &'static str = "technobaboo.StateSpaceAdventure";
 
-	fn on_frame(&mut self, _info: &stardust_xr_fusion::root::FrameInfo) {
+	fn on_frame(&mut self, info: &FrameInfo) {
 		if self.states.move_count() < 10 {
 			self.board.random_move();
 			self.states.add(&self.board);
 		}
-		self.states.force_direct(0.1, 0.85);
+		self.states.force_direct(info);
 	}
 }
 impl Reify for State {

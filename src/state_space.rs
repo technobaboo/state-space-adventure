@@ -1,23 +1,44 @@
-use std::{collections::HashMap, f32::consts::FRAC_PI_2};
-
 use crate::board::Board;
 use asteroids::{
 	elements::{circle, line_from_points, LineExt, Lines, Spatial},
 	CustomElement, Reify,
 };
-use glam::{vec3a, Mat4, Vec3A};
+use glam::{vec3, vec3a, Mat4, Vec3A};
 use petgraph::{
 	graph::NodeIndex,
 	prelude::StableUnGraph,
 	visit::{EdgeRef, IntoEdgeReferences},
 };
+use rand::{rng, Rng};
 use serde::{Deserialize, Serialize};
+use stardust_xr_fusion::root::FrameInfo;
+use std::{collections::HashMap, f32::consts::FRAC_PI_2};
+
+/// Configuration parameters for the Fruchterman-Reingold force-directed layout algorithm.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct FruchtermanReingoldConfig {
+	/// Cooling factor (between 0 and 1) reduces the temperature over iterations.
+	/// This simulates "annealing," gradually limiting node movement to reach equilibrium.
+	pub cooloff_factor: f32,
+
+	/// Scale factor controlling the overall size / spacing of the layout.
+	/// Higher scale values spread nodes farther apart.
+	pub scale: f32,
+}
+impl Default for FruchtermanReingoldConfig {
+	fn default() -> Self {
+		Self {
+			cooloff_factor: 0.99,
+			scale: 0.01,
+		}
+	}
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct NodeData<N> {
 	pos: Vec3A,
 	#[serde(skip)]
-	disp: Vec3A,
+	velocity: Vec3A,
 
 	hash: u64,
 	node: N,
@@ -28,6 +49,7 @@ pub struct StateSpace<const ROWS: usize, const COLS: usize> {
 	current: NodeIndex<u32>,
 	map: HashMap<u64, NodeIndex<u32>>,
 	states: StableUnGraph<NodeData<Board<ROWS, COLS>>, ()>,
+	config: FruchtermanReingoldConfig,
 }
 impl<const ROWS: usize, const COLS: usize> StateSpace<ROWS, COLS> {
 	pub fn new(board: Board<ROWS, COLS>) -> Self {
@@ -37,7 +59,7 @@ impl<const ROWS: usize, const COLS: usize> StateSpace<ROWS, COLS> {
 			pos: Vec3A::ZERO,
 			hash,
 			node: board,
-			disp: Vec3A::ZERO,
+			velocity: Vec3A::ZERO,
 		});
 		let mut map = HashMap::new();
 		map.insert(hash, idx);
@@ -45,17 +67,23 @@ impl<const ROWS: usize, const COLS: usize> StateSpace<ROWS, COLS> {
 			current: idx,
 			map,
 			states,
+			config: FruchtermanReingoldConfig::default(),
 		}
 	}
 	pub fn add(&mut self, board: &Board<ROWS, COLS>) {
+		let mut rng = rng();
 		let hash = board.board_hash();
 		if self.map.contains_key(&hash) {
 			return;
 		}
-		let current_pos = self.states.node_weight(self.current).unwrap().pos;
 		let idx = self.states.add_node(NodeData {
-			pos: current_pos + vec3a(0.01, 0.01, 0.01),
-			disp: Vec3A::ZERO,
+			pos: vec3(
+				rng.random_range(-0.05..0.05),
+				rng.random_range(-0.05..0.05),
+				rng.random_range(-0.05..0.05),
+			)
+			.into(),
+			velocity: Vec3A::ZERO,
 			hash,
 			node: board.clone(),
 		});
@@ -69,65 +97,67 @@ impl<const ROWS: usize, const COLS: usize> StateSpace<ROWS, COLS> {
 		self.states.edge_count()
 	}
 
-	pub fn force_direct(&mut self, k: f32, damping: f32) {
+	/// Applies the Fruchterman-Reingold (1991) force-directed graph layout algorithm
+	/// to arrange nodes in 3D space based on graph topology.
+	///
+	/// This implementation uses velocity persistence and temperature cooling to achieve
+	/// stable convergence over multiple iterations.
+	pub fn force_direct(&mut self, frame_info: &FrameInfo) {
 		if self.states.node_count() == 0 {
 			return;
 		}
 
-		// Initialize displacement vectors to zero
+		let config = self.config;
 		let nodes: Vec<_> = self.states.node_indices().collect();
-		for node_idx in nodes.iter().cloned() {
-			if let Some(node) = self.states.node_weight_mut(node_idx) {
-				node.disp = Vec3A::ZERO;
-			}
+
+		// Calculate forces and update velocities
+		for &v in nodes.iter() {
+			let pos_v = self.states.node_weight(v).unwrap().pos;
+			let mut velocity = self.states.node_weight(v).unwrap().velocity;
+
+			// Calculate repulsion forces (all other nodes)
+			let repulsion = nodes
+				.iter()
+				.filter(|&&other| other != v)
+				.map(|&other| {
+					let pos_o = self.states.node_weight(other).unwrap().pos;
+					let delta = pos_v - pos_o; // Direction from other to this node
+					let dist = delta.length().max(0.01);
+					let direction = delta / dist; // Normalize
+
+					// FR repulsion: -scale² / distance
+					direction * (config.scale * config.scale / dist)
+				})
+				.fold(Vec3A::ZERO, |acc, v| acc + v);
+
+			// Calculate attraction forces (neighbors)
+			let attraction = self
+				.states
+				.neighbors_undirected(v)
+				.filter(|&neighbor| neighbor != v)
+				.map(|neighbor| {
+					let pos_n = self.states.node_weight(neighbor).unwrap().pos;
+					let delta = pos_n - pos_v; // Direction from this node to neighbor
+					let dist = delta.length().max(0.01);
+					let direction = delta / dist; // Normalize
+
+					// FR attraction: distance² / scale
+					direction * (dist * dist / config.scale)
+				})
+				.fold(Vec3A::ZERO, |acc, v| acc + v);
+
+			// Update velocity with forces and apply damping
+			velocity += (attraction + repulsion) * frame_info.delta;
+			velocity *= config.cooloff_factor;
+
+			// Store the updated velocity
+			self.states.node_weight_mut(v).unwrap().velocity = velocity;
 		}
 
-		// Repulsive forces between all pairs of nodes
-		for (i, &v) in nodes.iter().enumerate() {
-			for &u in nodes.iter().skip(i + 1) {
-				let pos_v = self.states.node_weight(v).unwrap().pos;
-				let pos_u = self.states.node_weight(u).unwrap().pos;
-				let delta = pos_v - pos_u;
-				let dist = delta.length().max(0.01);
-				let force = k * k / dist;
-				let direction = delta / dist;
-
-				self.states.node_weight_mut(v).unwrap().disp += direction * force;
-				self.states.node_weight_mut(u).unwrap().disp -= direction * force;
-			}
-		}
-
-		// Attractive forces along edges
-		let edges = self
-			.states
-			.edge_references()
-			.map(|e| (e.source(), e.target()))
-			.collect::<Vec<_>>();
-		for (source, target) in edges {
-			let pos_s = self.states.node_weight(source).unwrap().pos;
-			let pos_t = self.states.node_weight(target).unwrap().pos;
-			let delta = pos_s - pos_t;
-			let dist = delta.length().max(0.01);
-			let force = (dist * dist) / k;
-			let direction = delta / dist;
-
-			self.states.node_weight_mut(source).unwrap().disp -= direction * force;
-			self.states.node_weight_mut(target).unwrap().disp += direction * force;
-		}
-
-		// Update node positions with damping and max displacement capped by temperature = k
-		let temperature = k;
+		// Apply velocities to positions
 		for node_idx in nodes {
 			let node = self.states.node_weight_mut(node_idx).unwrap();
-			let len = node.disp.length();
-
-			let delta_pos = if len > temperature {
-				node.disp / len * temperature
-			} else {
-				node.disp
-			};
-
-			node.pos += delta_pos * damping;
+			node.pos += node.velocity * frame_info.delta;
 		}
 	}
 }
