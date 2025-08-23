@@ -24,88 +24,91 @@ pub struct State {
 }
 impl Default for State {
 	fn default() -> Self {
-		let board = Board::new(vec![
-			// Tall red block on top-left
-			Block {
-				label: 'A',
-				color: rgba_linear!(0.75, 0.1, 0.1, 1.0),
-				top_left: Cell { row: 0, col: 0 },
-				width: 1,
-				height: 2,
-			},
-			// Large green target block at top center
-			Block {
-				label: 'B',
-				color: rgba_linear!(0.1, 0.75, 0.1, 1.0),
-				top_left: Cell { row: 0, col: 1 },
-				width: 2,
-				height: 2,
-			},
-			// Tall purple block on top-right
-			Block {
-				label: 'C',
-				color: rgba_linear!(0.4, 0.1, 0.75, 1.0),
-				top_left: Cell { row: 0, col: 3 },
-				width: 1,
-				height: 2,
-			},
-			// Tall teal block mid-left
-			Block {
-				label: 'D',
-				color: rgba_linear!(0.1, 0.65, 0.75, 1.0),
-				top_left: Cell { row: 2, col: 0 },
-				width: 1,
-				height: 2,
-			},
-			// Tall blue block mid-right
-			Block {
-				label: 'E',
-				color: rgba_linear!(0.1, 0.4, 0.75, 1.0),
-				top_left: Cell { row: 2, col: 3 },
-				width: 1,
-				height: 2,
-			},
-			// Orange horizontal block center
-			Block {
-				label: 'F',
-				color: rgba_linear!(0.75, 0.5, 0.1, 1.0),
-				top_left: Cell { row: 2, col: 1 },
-				width: 2,
-				height: 1,
-			},
-			// Pink small block bottom-left center
-			Block {
-				label: 'G',
-				color: rgba_linear!(0.85, 0.2, 0.5, 1.0),
-				top_left: Cell { row: 3, col: 1 },
-				width: 1,
-				height: 1,
-			},
-			// Green small block bottom-right center
-			Block {
-				label: 'H',
-				color: rgba_linear!(0.4, 0.75, 0.1, 1.0),
-				top_left: Cell { row: 3, col: 2 },
-				width: 1,
-				height: 1,
-			},
-			// Orange small block bottom-left corner
-			Block {
-				label: 'I',
-				color: rgba_linear!(0.75, 0.3, 0.1, 1.0),
-				top_left: Cell { row: 4, col: 0 },
-				width: 1,
-				height: 1,
-			},
-			// Green small block bottom-right corner
-			Block {
-				label: 'J',
-				color: rgba_linear!(0.3, 0.75, 0.1, 1.0),
-				top_left: Cell { row: 4, col: 3 },
-				width: 1,
-				height: 1,
-			},
-		])
+		let board = Board::new(
+			vec![
+				// Tall red block on top-left
+				Block {
+					label: 'A',
+					color: rgba_linear!(0.75, 0.1, 0.1, 1.0),
+					top_left: Cell { row: 0, col: 0 },
+					width: 1,
+					height: 2,
+				},
+				// Large green target block at top center
+				Block {
+					label: 'B',
+					color: rgba_linear!(0.1, 0.75, 0.1, 1.0),
+					top_left: Cell { row: 0, col: 1 },
+					width: 2,
+					height: 2,
+				},
+				// Tall purple block on top-right
+				Block {
+					label: 'C',
+					color: rgba_linear!(0.4, 0.1, 0.75, 1.0),
+					top_left: Cell { row: 0, col: 3 },
+					width: 1,
+					height: 2,
+				},
+				// Tall teal block mid-left
+				Block {
+					label: 'D',
+					color: rgba_linear!(0.1, 0.65, 0.75, 1.0),
+					top_left: Cell { row: 2, col: 0 },
+					width: 1,
+					height: 2,
+				},
+				// Tall blue block mid-right
+				Block {
+					label: 'E',
+					color: rgba_linear!(0.1, 0.4, 0.75, 1.0),
+					top_left: Cell { row: 2, col: 3 },
+					width: 1,
+					height: 2,
+				},
+				// Orange horizontal block center
+				Block {
+					label: 'F',
+					color: rgba_linear!(0.75, 0.5, 0.1, 1.0),
+					top_left: Cell { row: 2, col: 1 },
+					width: 2,
+					height: 1,
+				},
+				// Pink small block bottom-left center
+				Block {
+					label: 'G',
+					color: rgba_linear!(0.85, 0.2, 0.5, 1.0),
+					top_left: Cell { row: 3, col: 1 },
+					width: 1,
+					height: 1,
+				},
+				// Green small block bottom-right center
+				Block {
+					label: 'H',
+					color: rgba_linear!(0.4, 0.75, 0.1, 1.0),
+					top_left: Cell { row: 3, col: 2 },
+					width: 1,
+					height: 1,
+				},
+				// Orange small block bottom-left corner
+				Block {
+					label: 'I',
+					color: rgba_linear!(0.75, 0.3, 0.1, 1.0),
+					top_left: Cell { row: 4, col: 0 },
+					width: 1,
+					height: 1,
+				},
+				// Green small block bottom-right corner
+				Block {
+					label: 'J',
+					color: rgba_linear!(0.3, 0.75, 0.1, 1.0),
+					top_left: Cell { row: 4, col: 3 },
+					width: 1,
+					height: 1,
+				},
+			],
+			false,
+		)
 		.unwrap();
 		Self {
 			states: StateSpace::new(board.clone()),
