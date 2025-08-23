@@ -1,7 +1,12 @@
-use asteroids::{elements::Spatial, ClientState, CustomElement, Migrate, Reify, Transformable};
+use asteroids::{
+	elements::{Spatial, Text},
+	ClientState, CustomElement, Migrate, Reify, Transformable,
+};
 use board::{Block, Board, Cell};
 use serde::{Deserialize, Serialize};
-use stardust_xr_fusion::{project_local_resources, root::FrameInfo, values::color::rgba_linear};
+use stardust_xr_fusion::{
+	drawable::YAlign, project_local_resources, root::FrameInfo, values::color::rgba_linear,
+};
 use state_space::StateSpace;
 
 mod board;
@@ -116,7 +121,7 @@ impl ClientState for State {
 	const APP_ID: &'static str = "technobaboo.StateSpaceAdventure";
 
 	fn on_frame(&mut self, info: &FrameInfo) {
-		if self.states.move_count() < 10 {
+		if self.states.move_count() < 20 {
 			self.board.random_move();
 			self.states.add(&self.board);
 		}
@@ -137,17 +142,17 @@ impl Reify for State {
 						.reify_substate(|state: &mut Self| Some(&mut state.states)),
 				),
 			)
-		// .child(
-		// 	Text::new(format!("Hash: {}", {
-		// 		let mut hasher = DefaultHasher::new();
-		// 		self.board.hash(&mut hasher);
-		// 		hasher.finish()
-		// 	}))
-		// 	.text_align_y(YAlign::Top)
-		// 	.pos([0.0, 0.01, 0.0])
-		// 	.rot(glam::Quat::from_rotation_y(std::f32::consts::PI))
-		// 	.character_height(0.005)
-		// 	.build(),
-		// )
+			.child(
+				Text::new(format!(
+					"States: {}\nMoves: {}",
+					self.states.state_count(),
+					self.states.move_count()
+				))
+				.text_align_y(YAlign::Top)
+				.pos([0.0, 0.01, 0.0])
+				.rot(glam::Quat::from_rotation_y(std::f32::consts::PI))
+				.character_height(0.005)
+				.build(),
+			)
 	}
 }
