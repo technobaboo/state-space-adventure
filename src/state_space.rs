@@ -1,9 +1,9 @@
 use crate::board::{Block, Board};
 use asteroids::{
-	elements::{circle, line_from_points, Handle, LineExt, Lines, Spatial},
+	elements::{line_from_points, Handle, LineExt, Lines, Spatial},
 	CustomElement, Reify,
 };
-use glam::{vec3a, Mat4, Vec3A};
+use glam::{vec3a, Vec3A};
 use itertools::Itertools;
 use petgraph::{
 	graph::NodeIndex,
@@ -13,7 +13,7 @@ use petgraph::{
 use rand::{rng, Rng};
 use serde::{Deserialize, Serialize};
 use stardust_xr_fusion::{root::FrameInfo, values::Color};
-use std::{collections::HashMap, f32::consts::FRAC_PI_2};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize)]
 pub struct NodeData<N> {
@@ -60,8 +60,8 @@ impl<const ROWS: usize, const COLS: usize> StateSpace<ROWS, COLS> {
 			current: idx,
 			map,
 			states,
-			settle_speed: 10.0,
-			cooloff_factor: 0.99,
+			settle_speed: 5.0,
+			cooloff_factor: 0.95,
 			scale: 0.025,
 		}
 	}
@@ -179,8 +179,14 @@ impl<const ROWS: usize, const COLS: usize> Reify for StateSpace<ROWS, COLS> {
 						Lines::new(chunk.filter_map(|e| {
 							Some(
 								line_from_points(vec![
-									self.states.node_weight(e.source())?.pos,
-									self.states.node_weight(e.target())?.pos,
+									self.states
+										.node_weight(e.source())?
+										.pos
+										.clamp_length_max(10.0),
+									self.states
+										.node_weight(e.target())?
+										.pos
+										.clamp_length_max(10.0),
 								])
 								.thickness(0.001)
 								.color(e.weight().0),
