@@ -2,9 +2,17 @@ use asteroids::{
 	elements::{LineExt, Lines},
 	CustomElement, Reify, Transformable,
 };
+use glam::{vec3, Mat4};
+use rand::{rng, seq::IteratorRandom};
 use serde::{Deserialize, Serialize};
-use stardust_xr_fusion::drawable::{Line, LinePoint};
-use std::collections::{HashMap, HashSet};
+use stardust_xr_fusion::{
+	drawable::{Line, LinePoint},
+	values::{color::rgba_linear, Color},
+};
+use std::{
+	collections::{HashMap, HashSet},
+	hash::{Hash, Hasher},
+};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Cell {
@@ -17,11 +25,11 @@ pub struct Cell {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
 	pub label: char,
+	pub color: Color,
 	pub top_left: Cell,
 	pub width: usize,
 	pub height: usize,
 }
-
 impl Block {
 	fn cells(&self) -> HashSet<Cell> {
 		let mut set = HashSet::new();
@@ -41,6 +49,7 @@ impl Block {
 		}
 		Some(Block {
 			label: self.label,
+			color: self.color,
 			top_left: Cell {
 				row: new_row as usize,
 				col: new_col as usize,
@@ -50,11 +59,26 @@ impl Block {
 		})
 	}
 }
+impl Hash for Block {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.label.hash(state);
+		self.top_left.hash(state);
+		self.width.hash(state);
+		self.height.hash(state);
+	}
+}
 
 /// Klotski board with dimensions as const generics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Board<const ROWS: usize, const COLS: usize> {
 	blocks: HashMap<char, Block>,
+}
+impl<const ROWS: usize, const COLS: usize> Hash for Board<ROWS, COLS> {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		for block in self.blocks.values() {
+			block.hash(state);
+		}
+	}
 }
 impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
 	/// Creates a new board ensuring constraints are satisfied:
@@ -140,28 +164,66 @@ impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
 			.map_or(false, |block| block.cells().contains(&goal_cell))
 	}
 
-	fn rectangle_lines(top_left: Cell, width: usize, height: usize, padding: f32) -> Lines {
+	pub fn random_move(&mut self) {
+		let mut rng = rng();
+
+		// Directions to try for moves: (delta_row, delta_col)
+		let directions: &[(isize, isize)] = &[(-1, 0), (1, 0), (0, -1), (0, 1)];
+
+		// Generate all possible valid moves as (block_label, delta_row, delta_col)
+		let mut moves = Vec::new();
+		for &label in self.blocks.keys() {
+			for &(dr, dc) in directions {
+				if self.can_move(label, dr, dc) {
+					moves.push((label, dr, dc));
+				}
+			}
+		}
+
+		// Pick one at random and perform it
+		if let Some(&(label, dr, dc)) = moves.iter().choose(&mut rng) {
+			// We unwrap here because we already validated with can_move
+			self.move_block(label, dr, dc).unwrap();
+		}
+	}
+
+	fn rectangle_lines(
+		top_left: Cell,
+		width: usize,
+		height: usize,
+		padding: f32,
+		color: Color,
+	) -> Lines {
 		let w = (width as f32 * CELL_SIZE) - (padding * 2.0);
 		let h = (height as f32 * CELL_SIZE) - (padding * 2.0);
-		Lines::new([rectangle(w, h).thickness(0.001)]).pos([
-			(top_left.col as f32 * CELL_SIZE) + padding,
-			-(top_left.row as f32 * CELL_SIZE) - padding,
+		Lines::new([rectangle(w, h)
+			.thickness(0.001)
+			.color(color)
+			.transform(Mat4::from_translation(vec3(padding, -padding, 0.0)))])
+		.pos([
+			(top_left.col as f32 * CELL_SIZE),
+			-(top_left.row as f32 * CELL_SIZE),
 			0.0,
 		])
 	}
 }
 
 const CELL_SIZE: f32 = 0.02;
+const PADDING: f32 = 0.0025;
 
 impl<const ROWS: usize, const COLS: usize> Reify for Board<ROWS, COLS> {
 	fn reify(&self) -> impl asteroids::Element<Self> {
-		Self::rectangle_lines(Cell::default(), COLS, ROWS, 0.0)
-			.build()
-			.children(
-				self.blocks
-					.values()
-					.map(|b| Self::rectangle_lines(b.top_left, b.width, b.height, 0.0025).build()),
-			)
+		Self::rectangle_lines(
+			Cell::default(),
+			COLS,
+			ROWS,
+			-PADDING,
+			rgba_linear!(1.0, 1.0, 1.0, 1.0),
+		)
+		.build()
+		.children(self.blocks.values().map(|b| {
+			Self::rectangle_lines(b.top_left, b.width, b.height, PADDING, b.color).build()
+		}))
 	}
 }
 
