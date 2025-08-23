@@ -125,8 +125,9 @@ impl ClientState for State {
 
 	fn on_frame(&mut self, info: &FrameInfo) {
 		if self.states.move_count() < 100 {
-			self.board.random_move();
-			self.states.add(&self.board);
+			if let Some(moved_block) = self.board.random_move() {
+				self.states.add(&self.board, &moved_block);
+			}
 		}
 		self.states.force_direct(info);
 	}

@@ -189,7 +189,7 @@ impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
 			.map_or(false, |block| block.cells().contains(&goal_cell))
 	}
 
-	pub fn random_move(&mut self) {
+	pub fn random_move(&mut self) -> Option<Block> {
 		let mut rng = rng();
 
 		// Directions to try for moves: (delta_row, delta_col)
@@ -209,6 +209,9 @@ impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
 		if let Some(&(label, dr, dc)) = moves.iter().choose(&mut rng) {
 			// We unwrap here because we already validated with can_move
 			self.move_block(label, dr, dc).unwrap();
+			self.blocks.get(&label).cloned()
+		} else {
+			None
 		}
 	}
 

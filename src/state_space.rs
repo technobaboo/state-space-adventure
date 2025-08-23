@@ -1,4 +1,4 @@
-use crate::board::Board;
+use crate::board::{Block, Board};
 use asteroids::{
 	elements::{circle, line_from_points, Handle, LineExt, Lines, Spatial},
 	CustomElement, Reify,
@@ -12,7 +12,7 @@ use petgraph::{
 };
 use rand::{rng, Rng};
 use serde::{Deserialize, Serialize};
-use stardust_xr_fusion::root::FrameInfo;
+use stardust_xr_fusion::{root::FrameInfo, values::Color};
 use std::{collections::HashMap, f32::consts::FRAC_PI_2};
 
 #[derive(Serialize, Deserialize)]
@@ -26,10 +26,13 @@ pub struct NodeData<N> {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct EdgeData(Color);
+
+#[derive(Serialize, Deserialize)]
 pub struct StateSpace<const ROWS: usize, const COLS: usize> {
 	current: NodeIndex<u32>,
 	map: HashMap<u64, NodeIndex<u32>>,
-	states: StableUnGraph<NodeData<Board<ROWS, COLS>>, ()>,
+	states: StableUnGraph<NodeData<Board<ROWS, COLS>>, EdgeData>,
 
 	pub settle_speed: f32,
 
@@ -62,11 +65,11 @@ impl<const ROWS: usize, const COLS: usize> StateSpace<ROWS, COLS> {
 			scale: 0.01,
 		}
 	}
-	pub fn add(&mut self, board: &Board<ROWS, COLS>) {
+	pub fn add(&mut self, board: &Board<ROWS, COLS>, block: &Block) {
 		let hash = board.board_hash();
 		if let Some(&idx) = self.map.get(&hash) {
 			println!("linking to existing node");
-			self.link_to_node(idx);
+			self.link_to_node(idx, EdgeData(block.color));
 			return;
 		}
 
@@ -84,11 +87,11 @@ impl<const ROWS: usize, const COLS: usize> StateSpace<ROWS, COLS> {
 			hash,
 			node: board.clone(),
 		});
-		self.link_to_node(idx);
+		self.link_to_node(idx, EdgeData(block.color));
 	}
-	fn link_to_node(&mut self, node: NodeIndex) {
+	fn link_to_node(&mut self, node: NodeIndex, data: EdgeData) {
 		if self.current != node && !self.states.contains_edge(self.current, node) {
-			self.states.add_edge(self.current, node, ());
+			self.states.add_edge(self.current, node, data);
 		}
 		self.current = node;
 	}
@@ -179,7 +182,8 @@ impl<const ROWS: usize, const COLS: usize> Reify for StateSpace<ROWS, COLS> {
 									self.states.node_weight(e.source())?.pos,
 									self.states.node_weight(e.target())?.pos,
 								])
-								.thickness(0.001),
+								.thickness(0.001)
+								.color(e.weight().0),
 							)
 						}))
 						.build()
