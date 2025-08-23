@@ -82,6 +82,7 @@ impl Hash for Block {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Board<const ROWS: usize, const COLS: usize> {
 	blocks: HashMap<char, Block>,
+	pegged: bool,
 }
 impl<const ROWS: usize, const COLS: usize> Hash for Board<ROWS, COLS> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
@@ -94,7 +95,7 @@ impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
 	/// Creates a new board ensuring constraints are satisfied:
 	/// - All blocks fit inside the board
 	/// - No blocks overlap
-	pub fn new(blocks: Vec<Block>) -> Result<Self, String> {
+	pub fn new(blocks: Vec<Block>, pegged: bool) -> Result<Self, String> {
 		if ROWS == 0 || COLS == 0 {
 			return Err("Board dimensions must be > 0".to_string());
 		}
@@ -118,15 +119,29 @@ impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
 
 		Ok(Board {
 			blocks: blocks.into_iter().map(|b| (b.label, b)).collect(),
+			pegged,
 		})
 	}
 
 	/// Checks if move is valid for the given block label.
 	pub fn can_move(&self, label: char, delta_row: isize, delta_col: isize) -> bool {
-		let block = match self.blocks.get(&label) {
-			Some(b) => b,
-			None => return false,
+		if delta_row.abs() > 0 && delta_col.abs() > 0 {
+			return false;
+		}
+		if delta_row.abs() > 2 || delta_col.abs() > 2 {
+			return false;
+		}
+
+		let Some(block) = self.blocks.get(&label) else {
+			return false;
 		};
+
+		// if pegged, don't let anything move on a side with length greater than 1
+		if self.pegged
+			&& ((block.width > 1 && delta_row > 0) || (block.height > 1 && delta_col > 0))
+		{
+			return false;
+		}
 
 		if let Some(moved_block) = block.moved(delta_row, delta_col) {
 			if moved_block.top_left.row + moved_block.height > ROWS {
