@@ -149,7 +149,7 @@ impl Reify for State {
 					self.states.move_count()
 				))
 				.text_align_y(YAlign::Top)
-				.pos([0.0, 0.01, 0.0])
+				.pos([0.0, 0.02, 0.0])
 				.rot(glam::Quat::from_rotation_y(std::f32::consts::PI))
 				.character_height(0.005)
 				.build(),

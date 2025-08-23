@@ -1,13 +1,13 @@
 use crate::board::Board;
 use asteroids::{
-	elements::{circle, line_from_points, LineExt, Lines, Spatial},
+	elements::{circle, line_from_points, Handle, LineExt, Lines, Spatial},
 	CustomElement, Reify,
 };
 use glam::{vec3a, Mat4, Vec3A};
 use petgraph::{
 	graph::NodeIndex,
 	prelude::StableUnGraph,
-	visit::{EdgeRef, IntoEdgeReferences},
+	visit::{EdgeRef, IntoEdgeReferences, IntoNodeReferences},
 };
 use rand::{rng, Rng};
 use serde::{Deserialize, Serialize};
@@ -165,23 +165,6 @@ impl<const ROWS: usize, const COLS: usize> Reify for StateSpace<ROWS, COLS> {
 	fn reify(&self) -> impl asteroids::Element<Self> {
 		Spatial::default()
 			.build()
-			.child({
-				// nodes
-				let diamond = circle(4, 0.0, 0.005).thickness(0.001);
-				let octahedron = [
-					diamond.clone().transform(Mat4::from_rotation_x(FRAC_PI_2)),
-					diamond.clone().transform(Mat4::from_rotation_z(FRAC_PI_2)),
-					diamond,
-				];
-				Lines::new(self.states.node_weights().flat_map(|n| {
-					octahedron.iter().map(|shape| {
-						shape
-							.clone()
-							.transform(Mat4::from_translation(n.pos.into()))
-					})
-				}))
-				.build()
-			})
 			.child(
 				// edges
 				Lines::new(self.states.edge_references().filter_map(|e| {
@@ -195,5 +178,11 @@ impl<const ROWS: usize, const COLS: usize> Reify for StateSpace<ROWS, COLS> {
 				}))
 				.build(),
 			)
+			.children(self.states.node_references().map(|(idx, d)| {
+				Handle::new(d.pos, move |state: &mut Self, pos| {
+					state.states.node_weight_mut(idx).unwrap().pos = pos.into();
+				})
+				.build()
+			}))
 	}
 }
