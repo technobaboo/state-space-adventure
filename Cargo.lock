@@ -313,17 +313,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
-name = "client-template"
-version = "0.1.0"
-dependencies = [
- "asteroids",
- "glam",
- "serde",
- "stardust-xr-fusion",
- "tokio",
-]
-
-[[package]]
 name = "cluFlock"
 version = "1.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2066,6 +2055,17 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "zbus",
+]
+
+[[package]]
+name = "state-space-adventure"
+version = "0.1.0"
+dependencies = [
+ "asteroids",
+ "glam",
+ "serde",
+ "stardust-xr-fusion",
+ "tokio",
 ]
 
 [[package]]

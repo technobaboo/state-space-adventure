@@ -1,5 +1,5 @@
 [package]
-name = "client-template"
+name = "state-space-adventure"
 version = "0.1.0"
 edition = "2021"
 
