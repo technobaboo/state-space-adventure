@@ -54,7 +54,7 @@ dependencies = [
 [[package]]
 name = "asteroids"
 version = "2.0.0"
-source = "git+https://github.com/StardustXR/asteroids.git?branch=dev#1839091e151db03dac7e8997961a2a64a36bd41e"
+source = "git+https://github.com/StardustXR/asteroids.git?branch=dev#cfbd4c23558960b9ed648fbf11bb34793fa4927f"
 dependencies = [
  "ashpd",
  "bumpalo",
