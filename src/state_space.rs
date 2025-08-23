@@ -4,6 +4,7 @@ use asteroids::{
 	CustomElement, Reify,
 };
 use glam::{vec3a, Mat4, Vec3A};
+use itertools::Itertools;
 use petgraph::{
 	graph::NodeIndex,
 	prelude::StableUnGraph,
@@ -165,18 +166,24 @@ impl<const ROWS: usize, const COLS: usize> Reify for StateSpace<ROWS, COLS> {
 	fn reify(&self) -> impl asteroids::Element<Self> {
 		Spatial::default()
 			.build()
-			.child(
+			.children(
 				// edges
-				Lines::new(self.states.edge_references().filter_map(|e| {
-					Some(
-						line_from_points(vec![
-							self.states.node_weight(e.source())?.pos,
-							self.states.node_weight(e.target())?.pos,
-						])
-						.thickness(0.001),
-					)
-				}))
-				.build(),
+				self.states
+					.edge_references()
+					.chunks(100)
+					.into_iter()
+					.map(|chunk| {
+						Lines::new(chunk.filter_map(|e| {
+							Some(
+								line_from_points(vec![
+									self.states.node_weight(e.source())?.pos,
+									self.states.node_weight(e.target())?.pos,
+								])
+								.thickness(0.001),
+							)
+						}))
+						.build()
+					}),
 			)
 			.children(self.states.node_references().map(|(idx, d)| {
 				Handle::new(d.pos, move |state: &mut Self, pos| {

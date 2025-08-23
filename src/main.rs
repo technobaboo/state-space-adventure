@@ -121,7 +121,7 @@ impl ClientState for State {
 	const APP_ID: &'static str = "technobaboo.StateSpaceAdventure";
 
 	fn on_frame(&mut self, info: &FrameInfo) {
-		if self.states.move_count() < 20 {
+		if self.states.move_count() < 100 {
 			self.board.random_move();
 			self.states.add(&self.board);
 		}
