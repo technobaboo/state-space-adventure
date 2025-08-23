@@ -60,15 +60,14 @@ impl<const ROWS: usize, const COLS: usize> StateSpace<ROWS, COLS> {
 			current: idx,
 			map,
 			states,
-			settle_speed: 20.0,
-			cooloff_factor: 0.95,
-			scale: 0.01,
+			settle_speed: 10.0,
+			cooloff_factor: 0.99,
+			scale: 0.025,
 		}
 	}
 	pub fn add(&mut self, board: &Board<ROWS, COLS>, block: &Block) {
 		let hash = board.board_hash();
 		if let Some(&idx) = self.map.get(&hash) {
-			println!("linking to existing node");
 			self.link_to_node(idx, EdgeData(block.color));
 			return;
 		}
@@ -87,6 +86,7 @@ impl<const ROWS: usize, const COLS: usize> StateSpace<ROWS, COLS> {
 			hash,
 			node: board.clone(),
 		});
+		self.map.insert(hash, idx);
 		self.link_to_node(idx, EdgeData(block.color));
 	}
 	fn link_to_node(&mut self, node: NodeIndex, data: EdgeData) {
