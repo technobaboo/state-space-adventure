@@ -140,7 +140,8 @@ impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
 
 		// if pinned, don't let anything move on a side with length greater than 1
 		if self.pinned
-			&& ((block.width > 1 && delta_row > 0) || (block.height > 1 && delta_col > 0))
+			&& ((block.width > 1 && delta_row.abs() > 0)
+				|| (block.height > 1 && delta_col.abs() > 0))
 		{
 			return false;
 		}
