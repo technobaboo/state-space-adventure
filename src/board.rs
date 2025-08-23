@@ -82,7 +82,7 @@ impl Hash for Block {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Board<const ROWS: usize, const COLS: usize> {
 	blocks: HashMap<char, Block>,
-	pegged: bool,
+	pinned: bool,
 }
 impl<const ROWS: usize, const COLS: usize> Hash for Board<ROWS, COLS> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
@@ -97,7 +97,7 @@ impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
 	/// Creates a new board ensuring constraints are satisfied:
 	/// - All blocks fit inside the board
 	/// - No blocks overlap
-	pub fn new(blocks: Vec<Block>, pegged: bool) -> Result<Self, String> {
+	pub fn new(blocks: Vec<Block>, pinned: bool) -> Result<Self, String> {
 		if ROWS == 0 || COLS == 0 {
 			return Err("Board dimensions must be > 0".to_string());
 		}
@@ -121,7 +121,7 @@ impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
 
 		Ok(Board {
 			blocks: blocks.into_iter().map(|b| (b.label, b)).collect(),
-			pegged,
+			pinned,
 		})
 	}
 
@@ -138,8 +138,8 @@ impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
 			return false;
 		};
 
-		// if pegged, don't let anything move on a side with length greater than 1
-		if self.pegged
+		// if pinned, don't let anything move on a side with length greater than 1
+		if self.pinned
 			&& ((block.width > 1 && delta_row > 0) || (block.height > 1 && delta_col > 0))
 		{
 			return false;
