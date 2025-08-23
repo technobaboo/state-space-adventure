@@ -80,11 +80,11 @@ impl Hash for Block {
 
 /// Klotski board with dimensions as const generics.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Board<const ROWS: usize, const COLS: usize> {
+pub struct Board<const WIDTH: usize, const HEIGHT: usize> {
 	blocks: HashMap<char, Block>,
 	pinned: bool,
 }
-impl<const ROWS: usize, const COLS: usize> Hash for Board<ROWS, COLS> {
+impl<const WIDTH: usize, const HEIGHT: usize> Hash for Board<WIDTH, HEIGHT> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		let mut blocks = self.blocks.values().collect::<Vec<_>>();
 		blocks.sort_by_key(|block| block.label);
@@ -93,18 +93,20 @@ impl<const ROWS: usize, const COLS: usize> Hash for Board<ROWS, COLS> {
 		}
 	}
 }
-impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
+impl<const WIDTH: usize, const HEIGHT: usize> Board<WIDTH, HEIGHT> {
 	/// Creates a new board ensuring constraints are satisfied:
 	/// - All blocks fit inside the board
 	/// - No blocks overlap
 	pub fn new(blocks: Vec<Block>, pinned: bool) -> Result<Self, String> {
-		if ROWS == 0 || COLS == 0 {
+		if HEIGHT == 0 || WIDTH == 0 {
 			return Err("Board dimensions must be > 0".to_string());
 		}
 
 		// Check blocks fit
 		for block in &blocks {
-			if block.top_left.row + block.height > ROWS || block.top_left.col + block.width > COLS {
+			if block.top_left.row + block.height > HEIGHT
+				|| block.top_left.col + block.width > WIDTH
+			{
 				return Err(format!("Block '{}' out of board bounds", block.label));
 			}
 		}
@@ -147,10 +149,10 @@ impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
 		}
 
 		if let Some(moved_block) = block.moved(delta_row, delta_col) {
-			if moved_block.top_left.row + moved_block.height > ROWS {
+			if moved_block.top_left.row + moved_block.height > HEIGHT {
 				return false;
 			}
-			if moved_block.top_left.col + moved_block.width > COLS {
+			if moved_block.top_left.col + moved_block.width > WIDTH {
 				return false;
 			}
 			// Check overlaps
@@ -248,12 +250,12 @@ impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
 const CELL_SIZE: f32 = 0.02;
 const PADDING: f32 = 0.0025;
 
-impl<const ROWS: usize, const COLS: usize> Reify for Board<ROWS, COLS> {
+impl<const WIDTH: usize, const HEIGHT: usize> Reify for Board<WIDTH, HEIGHT> {
 	fn reify(&self) -> impl asteroids::Element<Self> {
 		Self::rectangle_lines(
 			Cell::default(),
-			COLS,
-			ROWS,
+			WIDTH,
+			HEIGHT,
 			-PADDING,
 			rgba_linear!(1.0, 1.0, 1.0, 1.0),
 		)
