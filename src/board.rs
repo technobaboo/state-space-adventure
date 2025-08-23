@@ -86,7 +86,9 @@ pub struct Board<const ROWS: usize, const COLS: usize> {
 }
 impl<const ROWS: usize, const COLS: usize> Hash for Board<ROWS, COLS> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		for block in self.blocks.values() {
+		let mut blocks = self.blocks.values().collect::<Vec<_>>();
+		blocks.sort_by_key(|block| block.label);
+		for block in blocks {
 			block.hash(state);
 		}
 	}
