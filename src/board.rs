@@ -11,7 +11,7 @@ use stardust_xr_fusion::{
 };
 use std::{
 	collections::{HashMap, HashSet},
-	hash::{Hash, Hasher},
+	hash::{DefaultHasher, Hash, Hasher},
 };
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -59,6 +59,16 @@ impl Block {
 		})
 	}
 }
+
+impl PartialEq for Block {
+	fn eq(&self, other: &Self) -> bool {
+		self.label == other.label
+			&& self.top_left == other.top_left
+			&& self.width == other.width
+			&& self.height == other.height
+	}
+}
+impl Eq for Block {}
 impl Hash for Block {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		self.label.hash(state);
@@ -69,7 +79,7 @@ impl Hash for Block {
 }
 
 /// Klotski board with dimensions as const generics.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Board<const ROWS: usize, const COLS: usize> {
 	blocks: HashMap<char, Block>,
 }
@@ -185,6 +195,12 @@ impl<const ROWS: usize, const COLS: usize> Board<ROWS, COLS> {
 			// We unwrap here because we already validated with can_move
 			self.move_block(label, dr, dc).unwrap();
 		}
+	}
+
+	pub fn board_hash(&self) -> u64 {
+		let mut hasher = DefaultHasher::new();
+		self.hash(&mut hasher);
+		hasher.finish()
 	}
 
 	fn rectangle_lines(
