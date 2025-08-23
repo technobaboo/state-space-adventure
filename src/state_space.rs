@@ -11,6 +11,7 @@ use petgraph::{
 	visit::{EdgeRef, IntoEdgeReferences, IntoNodeReferences},
 };
 use rand::{rng, Rng};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use stardust_xr_fusion::{
 	fields::Shape,
@@ -19,7 +20,7 @@ use stardust_xr_fusion::{
 };
 use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct NodeData<N> {
 	pos: Vec3A,
 	#[serde(skip)]
@@ -29,10 +30,10 @@ pub struct NodeData<N> {
 	node: N,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct EdgeData(Color);
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct StateSpace<const ROWS: usize, const COLS: usize> {
 	current: NodeIndex<u32>,
 	map: HashMap<u64, NodeIndex<u32>>,
@@ -118,48 +119,55 @@ impl<const ROWS: usize, const COLS: usize> StateSpace<ROWS, COLS> {
 
 		let nodes: Vec<_> = self.states.node_indices().collect();
 
-		// Calculate forces and update velocities
-		for &v in nodes.iter() {
-			let pos_v = self.states.node_weight(v).unwrap().pos;
-			let mut velocity = self.states.node_weight(v).unwrap().velocity;
+		// Calculate forces and update velocities in parallel
+		let velocity_updates: Vec<_> = nodes
+			.par_iter()
+			.map(|&v| {
+				let pos_v = self.states.node_weight(v).unwrap().pos;
+				let mut velocity = self.states.node_weight(v).unwrap().velocity;
 
-			// Calculate repulsion forces (all other nodes)
-			let repulsion = nodes
-				.iter()
-				.filter(|&&other| other != v)
-				.map(|&other| {
-					let pos_o = self.states.node_weight(other).unwrap().pos;
-					let delta = pos_v - pos_o; // Direction from other to this node
-					let dist = delta.length().max(0.01);
-					let direction = delta / dist; // Normalize
+				// Calculate repulsion forces (all other nodes)
+				let repulsion = nodes
+					.par_iter()
+					.filter(|&&other| other != v)
+					.map(|&other| {
+						let pos_o = self.states.node_weight(other).unwrap().pos;
+						let delta = pos_v - pos_o; // Direction from other to this node
+						let dist = delta.length().max(0.01);
+						let direction = delta / dist; // Normalize
 
-					// FR repulsion: -scale² / distance
-					direction * (self.scale * self.scale / dist)
-				})
-				.fold(Vec3A::ZERO, |acc, v| acc + v);
+						// FR repulsion: -scale² / distance
+						direction * (self.scale * self.scale / dist)
+					})
+					.reduce(|| Vec3A::ZERO, |acc, v| acc + v);
 
-			// Calculate attraction forces (neighbors)
-			let attraction = self
-				.states
-				.neighbors_undirected(v)
-				.filter(|&neighbor| neighbor != v)
-				.map(|neighbor| {
-					let pos_n = self.states.node_weight(neighbor).unwrap().pos;
-					let delta = pos_n - pos_v; // Direction from this node to neighbor
-					let dist = delta.length().max(0.01);
-					let direction = delta / dist; // Normalize
+				// Calculate attraction forces (neighbors)
+				let neighbors: Vec<_> = self.states.neighbors_undirected(v).collect();
+				let attraction = neighbors
+					.par_iter()
+					.filter(|&&neighbor| neighbor != v)
+					.map(|&neighbor| {
+						let pos_n = self.states.node_weight(neighbor).unwrap().pos;
+						let delta = pos_n - pos_v; // Direction from this node to neighbor
+						let dist = delta.length().max(0.01);
+						let direction = delta / dist; // Normalize
 
-					// FR attraction: distance² / scale
-					direction * (dist * dist / self.scale)
-				})
-				.fold(Vec3A::ZERO, |acc, v| acc + v);
+						// FR attraction: distance² / scale
+						direction * (dist * dist / self.scale)
+					})
+					.reduce(|| Vec3A::ZERO, |acc, v| acc + v);
 
-			// Update velocity with forces and apply damping
-			velocity += (attraction + repulsion) * frame_info.delta * self.settle_speed;
-			velocity *= self.cooloff_factor;
+				// Update velocity with forces and apply damping
+				velocity += (attraction + repulsion) * frame_info.delta * self.settle_speed;
+				velocity *= self.cooloff_factor;
 
-			// Store the updated velocity
-			self.states.node_weight_mut(v).unwrap().velocity = velocity;
+				(v, velocity)
+			})
+			.collect();
+
+		// Apply the calculated velocities
+		for (node_idx, velocity) in velocity_updates {
+			self.states.node_weight_mut(node_idx).unwrap().velocity = velocity;
 		}
 
 		// Apply velocities to positions
