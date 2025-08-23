@@ -1,7 +1,7 @@
 use crate::board::{Block, Board};
 use asteroids::{
-	elements::{line_from_points, Handle, LineExt, Lines, Spatial},
-	CustomElement, Reify,
+	elements::{line_from_points, lines, shape, Handle, LineExt, Lines, Spatial},
+	CustomElement, Reify, Transformable,
 };
 use glam::{vec3a, Vec3A};
 use itertools::Itertools;
@@ -12,7 +12,11 @@ use petgraph::{
 };
 use rand::{rng, Rng};
 use serde::{Deserialize, Serialize};
-use stardust_xr_fusion::{root::FrameInfo, values::Color};
+use stardust_xr_fusion::{
+	fields::Shape,
+	root::FrameInfo,
+	values::{color::rgba_linear, Color},
+};
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize)]
@@ -169,6 +173,15 @@ impl<const ROWS: usize, const COLS: usize> Reify for StateSpace<ROWS, COLS> {
 	fn reify(&self) -> impl asteroids::Element<Self> {
 		Spatial::default()
 			.build()
+			.child(
+				Lines::new(
+					shape(Shape::Sphere(0.001))
+						.into_iter()
+						.map(|l| l.thickness(0.01).color(rgba_linear!(1.0, 0.0, 1.0, 1.0))),
+				)
+				.pos(self.states.node_weight(self.current).unwrap().pos)
+				.build(),
+			)
 			.children(
 				// edges
 				self.states
