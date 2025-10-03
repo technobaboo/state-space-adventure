@@ -1,10 +1,10 @@
-use asteroids::{
-	elements::{LineExt, Lines},
-	CustomElement, Reify, Transformable,
-};
 use glam::{vec3, Mat4};
 use rand::{rng, seq::IteratorRandom};
 use serde::{Deserialize, Serialize};
+use stardust_xr_asteroids::{
+	elements::{LineExt, Lines},
+	CustomElement, Reify, Transformable,
+};
 use stardust_xr_fusion::{
 	drawable::{Line, LinePoint},
 	values::{color::rgba_linear, Color, Vector2},
@@ -253,7 +253,7 @@ const CELL_SIZE: f32 = 0.02;
 const PADDING: f32 = 0.0025;
 
 impl Reify for Board {
-	fn reify(&self) -> impl asteroids::Element<Self> {
+	fn reify(&self) -> impl stardust_xr_asteroids::Element<Self> {
 		Self::rectangle_lines(
 			[0; 2].into(),
 			self.width,

@@ -1,9 +1,9 @@
-use asteroids::{
+use board::{Block, Board};
+use serde::{Deserialize, Serialize};
+use stardust_xr_asteroids::{
 	elements::{Dial, Spatial, Text},
 	ClientState, CustomElement, FrameWarning, Migrate, Reify, Transformable,
 };
-use board::{Block, Board};
-use serde::{Deserialize, Serialize};
 use stardust_xr_fusion::{
 	drawable::YAlign, project_local_resources, root::FrameInfo, values::color::rgba_linear,
 };
@@ -14,7 +14,7 @@ mod state_space;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-	asteroids::client::run::<State>(&[&project_local_resources!("res")]).await
+	stardust_xr_asteroids::client::run::<State>(&[&project_local_resources!("res")]).await
 }
 
 #[derive(Serialize, Deserialize)] // Defining variables used in client
@@ -108,7 +108,7 @@ impl ClientState for State {
 	}
 }
 impl Reify for State {
-	fn reify(&self) -> impl asteroids::Element<Self> {
+	fn reify(&self) -> impl stardust_xr_asteroids::Element<Self> {
 		Spatial::default()
 			.build()
 			.child(
@@ -127,9 +127,8 @@ impl Reify for State {
 					self.states.state_count(),
 					self.states.move_count()
 				))
-				.text_align_y(YAlign::Top)
+				.align_y(YAlign::Top)
 				.pos([0.0, 0.02, 0.0])
-				.rot(glam::Quat::from_rotation_y(std::f32::consts::PI))
 				.character_height(0.005)
 				.build(),
 			)
@@ -142,7 +141,6 @@ impl Reify for State {
 				.build()
 				.child(
 					Text::new(format!("{}", self.states.settle_speed))
-						.rot(glam::Quat::from_rotation_y(std::f32::consts::PI))
 						.character_height(0.005)
 						.build(),
 				),
@@ -154,13 +152,10 @@ impl Reify for State {
 					delta * 1000.0,
 					real_delta * 1000.0
 				))
-				.text_align_y(YAlign::Top)
+				.align_y(YAlign::Top)
 				.color(rgba_linear!(0.75, 0.1, 0.1, 1.0))
 				.pos([-0.02, 0.0, 0.0])
-				.rot(
-					glam::Quat::from_rotation_y(std::f32::consts::PI)
-						* glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
-				)
+				.rot(glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2))
 				.character_height(0.005)
 				.build()
 			}))

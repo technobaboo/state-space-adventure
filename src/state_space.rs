@@ -1,8 +1,4 @@
 use crate::board::{Block, Board};
-use asteroids::{
-	elements::{line_from_points, shape, Handle, LineExt, Lines, Spatial},
-	CustomElement, Reify, Transformable,
-};
 use glam::{vec3a, Vec3A};
 use itertools::Itertools;
 use petgraph::{
@@ -13,6 +9,10 @@ use petgraph::{
 use rand::{rng, Rng};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use stardust_xr_asteroids::{
+	elements::{line_from_points, shape, Handle, LineExt, Lines, Spatial},
+	CustomElement, Reify, Transformable,
+};
 use stardust_xr_fusion::{
 	fields::Shape,
 	root::FrameInfo,
@@ -178,7 +178,7 @@ impl StateSpace {
 	}
 }
 impl Reify for StateSpace {
-	fn reify(&self) -> impl asteroids::Element<Self> {
+	fn reify(&self) -> impl stardust_xr_asteroids::Element<Self> {
 		Spatial::default()
 			.build()
 			.child(
@@ -217,6 +217,7 @@ impl Reify for StateSpace {
 					}),
 			)
 			.children(
+				// nodes
 				(self.state_count() < 25)
 					.then(|| {
 						self.states
