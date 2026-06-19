@@ -1,6 +1,5 @@
 use glam::{vec3, Mat4};
 use mint::Vector2;
-use rand::{rng, seq::IteratorRandom};
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
 	elements::{LineExt, Lines},
@@ -203,30 +202,28 @@ impl Board {
 			.map_or(false, |block| block.cells().contains(&goal_cell))
 	}
 
-	pub fn random_move(&mut self) -> Option<Block> {
-		let mut rng = rng();
-
+	/// Every board reachable from this one in a single valid (unit) move, each
+	/// paired with the block (in its new position) that moved to get there.
+	///
+	/// This enumerates the local neighborhood of the current state without
+	/// committing to any move, so the caller can decide where to go based on
+	/// which neighbors it has already seen.
+	pub fn neighbors(&self) -> Vec<(Block, Board)> {
 		// Directions to try for moves: (delta_x, delta_y)
-		let directions: &[(isize, isize)] = &[(0, -1), (0, 1), (-1, 0), (1, 0)];
+		const DIRECTIONS: [(isize, isize); 4] = [(0, -1), (0, 1), (-1, 0), (1, 0)];
 
-		// Generate all possible valid moves as (block_index, delta_x, delta_y)
-		let mut moves = Vec::new();
+		let mut out = Vec::new();
 		for index in 0..self.blocks.len() {
-			for &(dx, dy) in directions {
+			for (dx, dy) in DIRECTIONS {
 				if self.can_move(index, dx, dy) {
-					moves.push((index, dx, dy));
+					let mut next = self.clone();
+					// We unwrap here because we already validated with can_move
+					next.move_block(index, dx, dy).unwrap();
+					out.push((next.blocks[index].clone(), next));
 				}
 			}
 		}
-
-		// Pick one at random and perform it
-		if let Some(&(index, dx, dy)) = moves.iter().choose(&mut rng) {
-			// We unwrap here because we already validated with can_move
-			self.move_block(index, dx, dy).unwrap();
-			self.blocks.get(index).cloned()
-		} else {
-			None
-		}
+		out
 	}
 
 	pub fn board_hash(&self) -> u64 {

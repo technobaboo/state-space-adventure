@@ -1,4 +1,4 @@
-use crate::board::{Block, Board};
+use crate::board::Board;
 use crate::octree::Octree;
 use glam::{vec3a, Vec3A};
 use itertools::Itertools;
@@ -19,7 +19,7 @@ use stardust_xr_fusion::{
 	fields::Shape,
 	types::{rgba_linear, Color},
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct NodeData<N> {
@@ -29,6 +29,34 @@ pub struct NodeData<N> {
 
 	hash: u64,
 	node: N,
+
+	/// The node we discovered this one from, i.e. the move we'd undo to back
+	/// out of it. `None` for the root. This is what lets [`StateSpace::explore_dfs`]
+	/// backtrack during its depth-first walk without keeping any separate,
+	/// independently-persisted frontier — the path back to the root is just
+	/// parent pointers stored on nodes that are already part of the graph.
+	#[serde(default)]
+	parent: Option<NodeIndex<u32>>,
+
+	/// BFS distance from the root, recorded the moment this node is discovered.
+	/// Used only to rebuild [`StateSpace::bfs_frontier`] in the right order if it
+	/// ever needs to be reconstructed from scratch.
+	#[serde(default)]
+	depth: u32,
+
+	/// Whether [`StateSpace::explore_bfs`] has expanded this node yet (looked at
+	/// all of its neighbors). Defaulting to `false` on old data just means we
+	/// redo that (idempotent) work rather than silently skip nodes.
+	#[serde(default)]
+	bfs_expanded: bool,
+}
+
+/// Selects which traversal [`StateSpace::explore`] performs.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExploreMode {
+	Depth,
+	#[default]
+	Breadth,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -55,6 +83,15 @@ pub struct StateSpace {
 	/// more aggressively. 0.5 is a common default.
 	#[serde(default = "default_theta")]
 	pub theta: f32,
+
+	pub mode: ExploreMode,
+
+	/// Queue for [`Self::explore_bfs`]. Deliberately *not* serialized: rather
+	/// than trust a persisted queue to stay in sync with the graph across
+	/// saves/reloads (the bug the old depth-first frontier had), we rebuild it
+	/// on demand from the `bfs_expanded` flag on each node whenever it runs dry.
+	#[serde(skip)]
+	bfs_frontier: VecDeque<NodeIndex<u32>>,
 }
 
 fn default_theta() -> f32 {
@@ -69,6 +106,9 @@ impl StateSpace {
 			hash,
 			node: board,
 			velocity: Vec3A::ZERO,
+			parent: None,
+			depth: 0,
+			bfs_expanded: false,
 		});
 		let mut map = HashMap::new();
 		map.insert(hash, idx);
@@ -80,13 +120,127 @@ impl StateSpace {
 			cooloff_factor: 0.95,
 			scale: 0.025,
 			theta: default_theta(),
+			mode: ExploreMode::default(),
+			bfs_frontier: VecDeque::from([idx]),
 		}
 	}
-	pub fn add(&mut self, board: &Board, block: &Block) {
-		let hash = board.board_hash();
+
+	/// Expand the next state in the reachable state space, following
+	/// [`Self::mode`]. Returns the board reached this step, or `None` once the
+	/// whole connected state space has been mapped.
+	pub fn explore(&mut self) -> Option<Board> {
+		match self.mode {
+			ExploreMode::Depth => self.explore_dfs(),
+			ExploreMode::Breadth => self.explore_bfs(),
+		}
+	}
+
+	/// Depth-first walk of the reachable state space, one step per call.
+	///
+	/// At [`Self::current`] we look at every board reachable in a single move:
+	/// newly-discovered ones get added to the graph and wired up with an edge,
+	/// already-known ones just get the edge (so no move is ever dropped, even
+	/// the ones that loop back to a state we've already visited). The moment we
+	/// find a genuinely new state we step into it and return. If every neighbor
+	/// of `current` is already known, we've exhausted this branch, so we back
+	/// out along the parent pointer recorded when we first stepped into it and
+	/// try again from there.
+	///
+	/// Unlike a separately-tracked frontier queue, the only state this needs —
+	/// `current`, plus each node's `parent` — already lives in the graph itself,
+	/// so there's nothing extra that can fall out of sync with it. Returns the
+	/// board we just stepped into, or `None` once we've backtracked all the way
+	/// to the root with nowhere left to go.
+	fn explore_dfs(&mut self) -> Option<Board> {
+		loop {
+			let board = self.states.node_weight(self.current).unwrap().node.clone();
+			let mut stepped_into = None;
+
+			for (block, next) in board.neighbors() {
+				let hash = next.board_hash();
+				let discovered = self.map.contains_key(&hash);
+				let depth = self.states.node_weight(self.current).unwrap().depth;
+				let neighbor = self.ensure_node(next, hash, depth + 1);
+				self.add_edge(self.current, neighbor, block.display_color());
+				if !discovered {
+					self.states.node_weight_mut(neighbor).unwrap().parent = Some(self.current);
+					stepped_into = Some(neighbor);
+					break;
+				}
+			}
+
+			if let Some(neighbor) = stepped_into {
+				self.current = neighbor;
+				return Some(self.states.node_weight(neighbor).unwrap().node.clone());
+			}
+
+			self.current = self.states.node_weight(self.current).unwrap().parent?;
+		}
+	}
+
+	/// Breadth-first walk of the reachable state space, one step per call.
+	///
+	/// Expands the next not-yet-expanded node off [`Self::bfs_frontier`]: every
+	/// board reachable from it in one move gets an edge (existing or new), and
+	/// newly-discovered ones get queued. If the queue ever runs dry without
+	/// every node being expanded (e.g. right after a reload, since the queue
+	/// itself isn't persisted), it's rebuilt from scratch by scanning for
+	/// unexpanded nodes in `depth` order, so the walk can't get stuck on a
+	/// stale or empty queue. Returns `None` only once no unexpanded node is
+	/// left anywhere in the graph.
+	fn explore_bfs(&mut self) -> Option<Board> {
+		loop {
+			let Some(idx) = self.bfs_frontier.pop_front() else {
+				if !self.rebuild_bfs_frontier() {
+					return None;
+				}
+				continue;
+			};
+
+			let node = self.states.node_weight(idx).unwrap();
+			if node.bfs_expanded {
+				continue;
+			}
+			self.current = idx;
+			let board = node.node.clone();
+			let depth = node.depth;
+
+			for (block, next) in board.neighbors() {
+				let hash = next.board_hash();
+				let discovered = self.map.contains_key(&hash);
+				let neighbor = self.ensure_node(next, hash, depth + 1);
+				self.add_edge(idx, neighbor, block.display_color());
+				if !discovered {
+					self.bfs_frontier.push_back(neighbor);
+				}
+			}
+			self.states.node_weight_mut(idx).unwrap().bfs_expanded = true;
+
+			return Some(board);
+		}
+	}
+
+	/// Refills [`Self::bfs_frontier`] from every node not yet marked expanded,
+	/// ordered by BFS depth. Returns whether it found anything to queue.
+	fn rebuild_bfs_frontier(&mut self) -> bool {
+		let mut pending: Vec<_> = self
+			.states
+			.node_indices()
+			.filter(|&i| !self.states.node_weight(i).unwrap().bfs_expanded)
+			.collect();
+		if pending.is_empty() {
+			return false;
+		}
+		pending.sort_by_key(|&i| self.states.node_weight(i).unwrap().depth);
+		self.bfs_frontier = pending.into();
+		true
+	}
+
+	/// Returns the node for `board`, inserting it (positioned just off the
+	/// current node) if it isn't already in the graph.
+	fn ensure_node(&mut self, board: Board, hash: u64, depth: u32) -> NodeIndex<u32> {
 		if let Some(&idx) = self.map.get(&hash) {
-			self.link_to_node(idx, EdgeData(block.display_color()));
-			return;
+			return idx;
 		}
 
 		let mut rng = rng();
@@ -101,16 +255,20 @@ impl StateSpace {
 				.normalize() * 0.01),
 			velocity: Vec3A::ZERO,
 			hash,
-			node: board.clone(),
+			node: board,
+			parent: None,
+			depth,
+			bfs_expanded: false,
 		});
 		self.map.insert(hash, idx);
-		self.link_to_node(idx, EdgeData(block.display_color()));
+		idx
 	}
-	fn link_to_node(&mut self, node: NodeIndex, data: EdgeData) {
-		if self.current != node && !self.states.contains_edge(self.current, node) {
-			self.states.add_edge(self.current, node, data);
+
+	/// Adds an undirected edge between two distinct states if it doesn't exist yet.
+	fn add_edge(&mut self, a: NodeIndex<u32>, b: NodeIndex<u32>, color: Color) {
+		if a != b && !self.states.contains_edge(a, b) {
+			self.states.add_edge(a, b, EdgeData(color));
 		}
-		self.current = node;
 	}
 	pub fn state_count(&self) -> usize {
 		self.states.node_count()
@@ -219,25 +377,21 @@ impl Reify for StateSpace {
 						.build()
 					}),
 			)
-			.children(
+			.children({
+				let step_amount = (self.state_count() / 10).max(1);
 				// nodes
-				(self.state_count() < 100)
-					.then(|| {
-						self.states
-							.node_references()
-							.map(|(idx, d)| {
-								Handle::new(d.pos, move |state: &mut Self, pos| {
-									let Some(weight) = state.states.node_weight_mut(idx) else {
-										return;
-									};
-									weight.pos = pos.into();
-								})
-								.build()
-							})
-							.collect::<Vec<_>>()
+				self.states
+					.node_references()
+					.step_by(step_amount)
+					.map(|(idx, d)| {
+						Handle::new(d.pos, move |state: &mut Self, pos| {
+							let Some(weight) = state.states.node_weight_mut(idx) else {
+								return;
+							};
+							weight.pos = pos.into();
+						})
+						.build()
 					})
-					.into_iter()
-					.flatten(),
-			)
+			})
 	}
 }

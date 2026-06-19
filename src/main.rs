@@ -57,8 +57,10 @@ impl ClientState for State {
 	const APP_ID: &'static str = "technobaboo.StateSpaceAdventure";
 
 	fn on_frame(&mut self, info: &FrameInfo) {
-		if let Some(moved_block) = self.board.random_move() {
-			self.states.add(&self.board, &moved_block);
+		// Expand the next state in the frontier; mirror it onto the displayed
+		// board so the klotski view tracks whatever state is being explored.
+		if let Some(board) = self.states.explore() {
+			self.board = board;
 		}
 		self.states.force_direct(info);
 
@@ -76,15 +78,8 @@ impl Reify for State {
 					}),
 			)
 			.child(
-				Spatial::default()
-					.pos([0.0, 0.05, 0.0])
-					.build()
-					.child(
-						self.states
-							.reify_substate(context, tasks, |state: &mut Self| {
-								Some(&mut state.states)
-							}),
-					),
+				self.states
+					.reify_substate(context, tasks, |state: &mut Self| Some(&mut state.states)),
 			)
 			.child(
 				Text::new(format!(
