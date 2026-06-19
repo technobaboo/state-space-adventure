@@ -84,6 +84,14 @@ pub struct StateSpace {
 	#[serde(default = "default_theta")]
 	pub theta: f32,
 
+	/// Hard cap on node speed (units/sec). Without this, a frame with a
+	/// large delta or a cluster of overlapping nodes (e.g. right after
+	/// several new states are discovered at the same spot) can produce a
+	/// runaway repulsion/attraction feedback loop that flings nodes out to
+	/// infinity instead of settling.
+	#[serde(default = "default_max_speed")]
+	pub max_speed: f32,
+
 	pub mode: ExploreMode,
 
 	/// Queue for [`Self::explore_bfs`]. Deliberately *not* serialized: rather
@@ -97,6 +105,15 @@ pub struct StateSpace {
 fn default_theta() -> f32 {
 	0.5
 }
+fn default_max_speed() -> f32 {
+	2.0
+}
+
+/// Largest delta-time we'll integrate in one step. Clamping this stops a
+/// frame hitch (e.g. loading a board, a stall) from being treated as a huge
+/// timestep, which would otherwise blow forces and velocities up in a single
+/// step.
+const MAX_DELTA: f32 = 1.0 / 30.0;
 impl StateSpace {
 	pub fn new(board: Board) -> Self {
 		let hash = board.board_hash();
@@ -116,10 +133,11 @@ impl StateSpace {
 			current: idx,
 			map,
 			states,
-			settle_speed: 5.0,
+			settle_speed: 10.0,
 			cooloff_factor: 0.95,
-			scale: 0.025,
+			scale: 0.01,
 			theta: default_theta(),
+			max_speed: default_max_speed(),
 			mode: ExploreMode::default(),
 			bfs_frontier: VecDeque::from([idx]),
 		}
@@ -287,6 +305,7 @@ impl StateSpace {
 			return;
 		}
 
+		let delta = frame_info.delta.min(MAX_DELTA);
 		let nodes: Vec<_> = self.states.node_indices().collect();
 
 		// Build a Barnes-Hut octree over the current node positions so each
@@ -325,8 +344,15 @@ impl StateSpace {
 					.reduce(|| Vec3A::ZERO, |acc, v| acc + v);
 
 				// Update velocity with forces and apply damping
-				velocity += (attraction + repulsion) * frame_info.delta * self.settle_speed;
+				velocity += (attraction + repulsion) * delta * self.settle_speed;
 				velocity *= self.cooloff_factor;
+
+				// Hard speed cap: stops a runaway repulsion/attraction
+				// feedback loop from flinging nodes out to infinity.
+				let speed = velocity.length();
+				if speed > self.max_speed {
+					velocity *= self.max_speed / speed;
+				}
 
 				(v, velocity)
 			})
@@ -337,10 +363,13 @@ impl StateSpace {
 			self.states.node_weight_mut(node_idx).unwrap().velocity = velocity;
 		}
 
-		// Apply velocities to positions
+		// Apply velocities to positions. `settle_speed` already shaped how
+		// strongly forces feed into velocity above; applying it again here
+		// would double its effect (effectively squaring it) and overdrive
+		// the integration into a stiff, oscillating system.
 		for node_idx in nodes {
 			let node = self.states.node_weight_mut(node_idx).unwrap();
-			node.pos += node.velocity * frame_info.delta * self.settle_speed;
+			node.pos += node.velocity * delta;
 		}
 	}
 }
