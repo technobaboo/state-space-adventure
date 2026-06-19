@@ -1,4 +1,5 @@
 use crate::board::{Block, Board};
+use crate::octree::Octree;
 use glam::{vec3a, Vec3A};
 use itertools::Itertools;
 use petgraph::{
@@ -48,6 +49,16 @@ pub struct StateSpace {
 	/// Scale factor controlling the overall size / spacing of the layout.
 	/// Higher scale values spread nodes farther apart.
 	pub scale: f32,
+
+	/// Barnes-Hut opening threshold for the octree-approximated repulsion.
+	/// Smaller values are more accurate but slower; larger values approximate
+	/// more aggressively. 0.5 is a common default.
+	#[serde(default = "default_theta")]
+	pub theta: f32,
+}
+
+fn default_theta() -> f32 {
+	0.5
 }
 impl StateSpace {
 	pub fn new(board: Board) -> Self {
@@ -68,6 +79,7 @@ impl StateSpace {
 			settle_speed: 5.0,
 			cooloff_factor: 0.95,
 			scale: 0.025,
+			theta: default_theta(),
 		}
 	}
 	pub fn add(&mut self, board: &Board, block: &Block) {
@@ -119,6 +131,15 @@ impl StateSpace {
 
 		let nodes: Vec<_> = self.states.node_indices().collect();
 
+		// Build a Barnes-Hut octree over the current node positions so each
+		// node can approximate repulsion against distant clusters as a single
+		// aggregate body, instead of iterating over every other node (O(n²)).
+		let positions: Vec<_> = nodes
+			.iter()
+			.map(|&v| self.states.node_weight(v).unwrap().pos)
+			.collect();
+		let octree = Octree::build(&positions);
+
 		// Calculate forces and update velocities in parallel
 		let velocity_updates: Vec<_> = nodes
 			.par_iter()
@@ -126,20 +147,8 @@ impl StateSpace {
 				let pos_v = self.states.node_weight(v).unwrap().pos;
 				let mut velocity = self.states.node_weight(v).unwrap().velocity;
 
-				// Calculate repulsion forces (all other nodes)
-				let repulsion = nodes
-					.par_iter()
-					.filter(|&&other| other != v)
-					.map(|&other| {
-						let pos_o = self.states.node_weight(other).unwrap().pos;
-						let delta = pos_v - pos_o; // Direction from other to this node
-						let dist = delta.length().max(0.01);
-						let direction = delta / dist; // Normalize
-
-						// FR repulsion: -scale² / distance
-						direction * (self.scale * self.scale / dist)
-					})
-					.reduce(|| Vec3A::ZERO, |acc, v| acc + v);
+				// Approximate repulsion forces against all other nodes via the octree.
+				let repulsion = octree.repulsion(pos_v, self.scale, self.theta);
 
 				// Calculate attraction forces (neighbors)
 				let neighbors: Vec<_> = self.states.neighbors_undirected(v).collect();

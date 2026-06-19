@@ -9,6 +9,7 @@ use stardust_xr_fusion::{client::FrameInfo, drawable::YAlign};
 use state_space::StateSpace;
 
 mod board;
+mod octree;
 mod state_space;
 
 #[tokio::main(flavor = "current_thread")]
