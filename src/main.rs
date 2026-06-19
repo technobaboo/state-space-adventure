@@ -1,12 +1,11 @@
 use board::{Block, Board};
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
-	elements::{Dial, Spatial, Text},
-	ClientState, CustomElement, FrameWarning, Migrate, Reify, Transformable,
+	elements::{rgba_linear, Dial, Spatial, Text},
+	project_local_resources, ClientState, Context, CustomElement, Element, FrameWarning, Migrate,
+	Reify, Tasker, Transformable,
 };
-use stardust_xr_fusion::{
-	drawable::YAlign, project_local_resources, root::FrameInfo, values::color::rgba_linear,
-};
+use stardust_xr_fusion::{client::FrameInfo, drawable::YAlign};
 use state_space::StateSpace;
 
 mod board;
@@ -14,7 +13,9 @@ mod state_space;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-	stardust_xr_asteroids::client::run::<State>(&[&project_local_resources!("res")]).await
+	stardust_xr_asteroids::client::run::<State>(&[&project_local_resources!("res")])
+		.await
+		.unwrap();
 }
 
 #[derive(Serialize, Deserialize)] // Defining variables used in client
@@ -108,18 +109,25 @@ impl ClientState for State {
 	}
 }
 impl Reify for State {
-	fn reify(&self) -> impl stardust_xr_asteroids::Element<Self> {
+	fn reify(&self, context: &Context, tasks: impl Tasker<Self>) -> impl Element<Self> {
 		Spatial::default()
 			.build()
 			.child(
 				self.board
-					.reify_substate(|state: &mut Self| Some(&mut state.board)),
+					.reify_substate(context, tasks.clone(), |state: &mut Self| {
+						Some(&mut state.board)
+					}),
 			)
 			.child(
-				Spatial::default().pos([0.0, 0.05, 0.0]).build().child(
-					self.states
-						.reify_substate(|state: &mut Self| Some(&mut state.states)),
-				),
+				Spatial::default()
+					.pos([0.0, 0.05, 0.0])
+					.build()
+					.child(
+						self.states
+							.reify_substate(context, tasks, |state: &mut Self| {
+								Some(&mut state.states)
+							}),
+					),
 			)
 			.child(
 				Text::new(format!(

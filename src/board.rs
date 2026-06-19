@@ -1,13 +1,14 @@
 use glam::{vec3, Mat4};
+use mint::Vector2;
 use rand::{rng, seq::IteratorRandom};
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
 	elements::{LineExt, Lines},
-	CustomElement, Reify, Transformable,
+	Context, CustomElement, Element, Reify, Tasker, Transformable,
 };
 use stardust_xr_fusion::{
 	drawable::{Line, LinePoint},
-	values::{color::rgba_linear, Color, Vector2},
+	types::{rgba_linear, Color},
 };
 use std::{
 	collections::{HashMap, HashSet},
@@ -253,7 +254,7 @@ const CELL_SIZE: f32 = 0.02;
 const PADDING: f32 = 0.0025;
 
 impl Reify for Board {
-	fn reify(&self) -> impl stardust_xr_asteroids::Element<Self> {
+	fn reify(&self, _context: &Context, _tasks: impl Tasker<Self>) -> impl Element<Self> {
 		Self::rectangle_lines(
 			[0; 2].into(),
 			self.width,

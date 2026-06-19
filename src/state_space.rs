@@ -11,12 +11,12 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
 	elements::{line_from_points, shape, Handle, LineExt, Lines, Spatial},
-	CustomElement, Reify, Transformable,
+	Context, CustomElement, Element, Reify, Tasker, Transformable,
 };
 use stardust_xr_fusion::{
+	client::FrameInfo,
 	fields::Shape,
-	root::FrameInfo,
-	values::{color::rgba_linear, Color},
+	types::{rgba_linear, Color},
 };
 use std::collections::HashMap;
 
@@ -178,12 +178,12 @@ impl StateSpace {
 	}
 }
 impl Reify for StateSpace {
-	fn reify(&self) -> impl stardust_xr_asteroids::Element<Self> {
+	fn reify(&self, _context: &Context, _tasks: impl Tasker<Self>) -> impl Element<Self> {
 		Spatial::default()
 			.build()
 			.child(
 				Lines::new(
-					shape(Shape::Sphere(0.001))
+					shape(Shape::Sphere { radius: 0.001 })
 						.into_iter()
 						.map(|l| l.thickness(0.01).color(rgba_linear!(1.0, 0.0, 1.0, 1.0))),
 				)
