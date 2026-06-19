@@ -1504,6 +1504,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ron"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4147b952f3f819eca0e99527022f7d6a8d05f111aeb0a62960c74eb283bec8fc"
+dependencies = [
+ "bitflags",
+ "once_cell",
+ "serde",
+ "serde_derive",
+ "typeid",
+ "unicode-ident",
+]
+
+[[package]]
 name = "rustc-hash"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1592,6 +1606,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "serde_ron"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f82236e6c6904898bb79ef297705999960b58db366920f3ec2505a73d444289"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -1705,7 +1728,7 @@ dependencies = [
  "map-range",
  "mint",
  "ouroboros",
- "ron",
+ "ron 0.11.0",
  "rustc-hash",
  "serde",
  "stardust-xr-fusion",
@@ -1794,7 +1817,9 @@ dependencies = [
  "petgraph",
  "rand",
  "rayon",
+ "ron 0.12.1",
  "serde",
+ "serde_ron",
  "stardust-xr-asteroids",
  "stardust-xr-fusion",
  "tokio",
@@ -2040,6 +2065,12 @@ dependencies = [
  "thiserror",
  "utf-8",
 ]
+
+[[package]]
+name = "typeid"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
 
 [[package]]
 name = "typenum"

@@ -11,23 +11,30 @@ use stardust_xr_fusion::{
 	types::{rgba_linear, Color},
 };
 use std::{
-	collections::{HashMap, HashSet},
+	collections::HashSet,
 	hash::{DefaultHasher, Hash, Hasher},
+	path::Path,
 };
 
 pub type Cell = Vector2<usize>;
 
 /// Represents a block on the board.
 /// The block occupies a contiguous rectangle defined by top-left cell, width and height.
+/// `color` is a linear `[r, g, b, a]`; it's converted to a display [`Color`] on demand.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
-	pub label: char,
-	pub color: Color,
+	pub color: [f32; 4],
 	pub top_left: Cell,
 	pub width: usize,
 	pub height: usize,
 }
 impl Block {
+	/// The block's color as a renderable [`Color`].
+	pub fn display_color(&self) -> Color {
+		let [r, g, b, a] = self.color;
+		rgba_linear!(r, g, b, a)
+	}
+
 	fn cells(&self) -> HashSet<Cell> {
 		let mut set = HashSet::new();
 		for r in self.top_left.y..self.top_left.y + self.height {
@@ -45,7 +52,6 @@ impl Block {
 			return None;
 		}
 		Some(Block {
-			label: self.label,
 			color: self.color,
 			top_left: Cell {
 				x: new_x as usize,
@@ -57,65 +63,61 @@ impl Block {
 	}
 }
 
+// Equality and hashing ignore color: two blocks of the same shape and position
+// are the same board state regardless of how they're painted.
 impl PartialEq for Block {
 	fn eq(&self, other: &Self) -> bool {
-		self.label == other.label
-			&& self.top_left == other.top_left
-			&& self.width == other.width
-			&& self.height == other.height
+		self.top_left == other.top_left && self.width == other.width && self.height == other.height
 	}
 }
 impl Eq for Block {}
 impl Hash for Block {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		self.label.hash(state);
 		self.top_left.hash(state);
 		self.width.hash(state);
 		self.height.hash(state);
 	}
 }
 
-/// Klotski board with dimensions as const generics.
+/// Klotski board. This is also the on-disk `.ron` format, serialized directly.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Board {
 	width: usize,
 	height: usize,
-	blocks: HashMap<char, Block>,
 	pinned: bool,
+	blocks: Vec<Block>,
 }
 impl Hash for Board {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		let mut blocks = self.blocks.values().collect::<Vec<_>>();
-		blocks.sort_by_key(|block| block.label);
+		// Hash in a canonical (position-sorted) order so equivalent states match
+		// regardless of the order blocks happen to be stored in.
+		let mut blocks = self.blocks.iter().collect::<Vec<_>>();
+		blocks.sort_by_key(|b| (b.top_left.x, b.top_left.y, b.width, b.height));
 		for block in blocks {
 			block.hash(state);
 		}
 	}
 }
 impl Board {
-	/// Creates a new board ensuring constraints are satisfied:
-	/// - All blocks fit inside the board
-	/// - No blocks overlap
-	pub fn new(
-		width: usize,
-		height: usize,
-		blocks: Vec<Block>,
-		pinned: bool,
-	) -> Result<Self, String> {
-		if width == 0 || height == 0 {
+	/// Checks the board's invariants: positive dimensions, every block inside
+	/// the bounds, and no two blocks overlapping.
+	fn validate(&self) -> Result<(), String> {
+		if self.width == 0 || self.height == 0 {
 			return Err("Board dimensions must be > 0".to_string());
 		}
 
 		// Check blocks fit
-		for block in &blocks {
-			if block.top_left.x + block.width > width || block.top_left.y + block.height > height {
-				return Err(format!("Block '{}' out of board bounds", block.label));
+		for (i, block) in self.blocks.iter().enumerate() {
+			if block.top_left.x + block.width > self.width
+				|| block.top_left.y + block.height > self.height
+			{
+				return Err(format!("Block {i} out of board bounds"));
 			}
 		}
 
 		// Check overlaps
 		let mut occupied = HashSet::new();
-		for block in &blocks {
+		for block in &self.blocks {
 			for cell in block.cells() {
 				if !occupied.insert(cell) {
 					return Err(format!("Overlapping blocks at {cell:?}"));
@@ -123,16 +125,26 @@ impl Board {
 			}
 		}
 
-		Ok(Board {
-			width,
-			height,
-			blocks: blocks.into_iter().map(|b| (b.label, b)).collect(),
-			pinned,
-		})
+		Ok(())
 	}
 
-	/// Checks if move is valid for the given block label.
-	pub fn can_move(&self, label: char, delta_x: isize, delta_y: isize) -> bool {
+	/// Builds a [`Board`] from a RON string and validates it.
+	pub fn from_ron_str(s: &str) -> Result<Board, String> {
+		let board: Board = ron::from_str(s).map_err(|e| e.to_string())?;
+		board.validate()?;
+		Ok(board)
+	}
+
+	/// Loads a board from a `.ron` file on disk.
+	pub fn from_ron_file(path: impl AsRef<Path>) -> Result<Board, String> {
+		let path = path.as_ref();
+		let s = std::fs::read_to_string(path)
+			.map_err(|e| format!("failed to read board file {}: {e}", path.display()))?;
+		Self::from_ron_str(&s)
+	}
+
+	/// Checks if the move is valid for the block at the given index.
+	pub fn can_move(&self, index: usize, delta_x: isize, delta_y: isize) -> bool {
 		if delta_x.abs() > 0 && delta_y.abs() > 0 {
 			return false;
 		}
@@ -140,7 +152,7 @@ impl Board {
 			return false;
 		}
 
-		let Some(block) = self.blocks.get(&label) else {
+		let Some(block) = self.blocks.get(index) else {
 			return false;
 		};
 
@@ -160,8 +172,8 @@ impl Board {
 			}
 			// Check overlaps
 			let moved_cells = moved_block.cells();
-			for (other_label, other_block) in &self.blocks {
-				if *other_label == label {
+			for (other_index, other_block) in self.blocks.iter().enumerate() {
+				if other_index == index {
 					continue;
 				}
 				if !moved_cells.is_disjoint(&other_block.cells()) {
@@ -174,26 +186,20 @@ impl Board {
 		}
 	}
 
-	/// Move the block if valid.
-	pub fn move_block(
-		&mut self,
-		label: char,
-		delta_x: isize,
-		delta_y: isize,
-	) -> Result<(), String> {
-		if !self.can_move(label, delta_x, delta_y) {
-			return Err(format!("Invalid move for block '{label}'"));
+	/// Move the block at the given index if valid.
+	pub fn move_block(&mut self, index: usize, delta_x: isize, delta_y: isize) -> Result<(), String> {
+		if !self.can_move(index, delta_x, delta_y) {
+			return Err(format!("Invalid move for block {index}"));
 		}
-		let block = self.blocks.get(&label).cloned().unwrap();
-		let moved_block = block.moved(delta_x, delta_y).unwrap();
-		self.blocks.insert(label, moved_block);
+		let moved_block = self.blocks[index].moved(delta_x, delta_y).unwrap();
+		self.blocks[index] = moved_block;
 		Ok(())
 	}
 
 	/// Example: Check if the board is solved given a target block and goal cell.
-	pub fn is_solved(&self, target_label: char, goal_cell: Cell) -> bool {
+	pub fn is_solved(&self, target_index: usize, goal_cell: Cell) -> bool {
 		self.blocks
-			.get(&target_label)
+			.get(target_index)
 			.map_or(false, |block| block.cells().contains(&goal_cell))
 	}
 
@@ -203,21 +209,21 @@ impl Board {
 		// Directions to try for moves: (delta_x, delta_y)
 		let directions: &[(isize, isize)] = &[(0, -1), (0, 1), (-1, 0), (1, 0)];
 
-		// Generate all possible valid moves as (block_label, delta_x, delta_y)
+		// Generate all possible valid moves as (block_index, delta_x, delta_y)
 		let mut moves = Vec::new();
-		for &label in self.blocks.keys() {
+		for index in 0..self.blocks.len() {
 			for &(dx, dy) in directions {
-				if self.can_move(label, dx, dy) {
-					moves.push((label, dx, dy));
+				if self.can_move(index, dx, dy) {
+					moves.push((index, dx, dy));
 				}
 			}
 		}
 
 		// Pick one at random and perform it
-		if let Some(&(label, dx, dy)) = moves.iter().choose(&mut rng) {
+		if let Some(&(index, dx, dy)) = moves.iter().choose(&mut rng) {
 			// We unwrap here because we already validated with can_move
-			self.move_block(label, dx, dy).unwrap();
-			self.blocks.get(&label).cloned()
+			self.move_block(index, dx, dy).unwrap();
+			self.blocks.get(index).cloned()
 		} else {
 			None
 		}
@@ -263,8 +269,8 @@ impl Reify for Board {
 			rgba_linear!(1.0, 1.0, 1.0, 1.0),
 		)
 		.build()
-		.children(self.blocks.values().map(|b| {
-			Self::rectangle_lines(b.top_left, b.width, b.height, PADDING, b.color).build()
+		.children(self.blocks.iter().map(|b| {
+			Self::rectangle_lines(b.top_left, b.width, b.height, PADDING, b.display_color()).build()
 		}))
 	}
 }

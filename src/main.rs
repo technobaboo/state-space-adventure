@@ -1,4 +1,4 @@
-use board::{Block, Board};
+use board::Board;
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
 	elements::{rgba_linear, Dial, Spatial, Text},
@@ -25,65 +25,21 @@ pub struct State {
 	#[serde(skip)]
 	frame_warning: FrameWarning,
 }
+/// Path used when no board file is passed as an argument.
+const DEFAULT_BOARD_PATH: &str = "boards/default.ron";
+
+/// Loads the board from the first CLI argument if given, otherwise from
+/// [`DEFAULT_BOARD_PATH`].
+fn load_board() -> Board {
+	let path = std::env::args()
+		.nth(1)
+		.unwrap_or_else(|| DEFAULT_BOARD_PATH.to_string());
+	Board::from_ron_file(&path).unwrap_or_else(|e| panic!("failed to load board: {e}"))
+}
+
 impl Default for State {
 	fn default() -> Self {
-		let board = Board::new(
-			7,
-			7,
-			vec![
-				Block {
-					label: 'M', // magenta
-					color: rgba_linear!(0.9, 0.1, 0.6, 1.0),
-					top_left: [1, 0].into(),
-					width: 3,
-					height: 1,
-				},
-				Block {
-					label: 'P', // purple
-					color: rgba_linear!(0.5, 0.1, 0.9, 1.0),
-					top_left: [6, 0].into(),
-					width: 1,
-					height: 2,
-				},
-				Block {
-					label: 'R', // red
-					color: rgba_linear!(0.9, 0.2, 0.2, 1.0),
-					top_left: [2, 1].into(),
-					width: 1,
-					height: 3,
-				},
-				Block {
-					label: 'G', // green
-					color: rgba_linear!(0.1, 0.9, 0.1, 1.0),
-					top_left: [0, 2].into(),
-					width: 2,
-					height: 1,
-				},
-				Block {
-					label: 'O', // orange
-					color: rgba_linear!(0.9, 0.6, 0.1, 1.0),
-					top_left: [0, 3].into(),
-					width: 2,
-					height: 1,
-				},
-				Block {
-					label: 'T', // teal
-					color: rgba_linear!(0.1, 0.8, 0.8, 1.0),
-					top_left: [6, 2].into(),
-					width: 1,
-					height: 3,
-				},
-				Block {
-					label: 'B', // blue
-					color: rgba_linear!(0.1, 0.3, 0.9, 1.0),
-					top_left: [2, 6].into(),
-					width: 3,
-					height: 1,
-				},
-			],
-			true,
-		)
-		.unwrap();
+		let board = load_board();
 
 		Self {
 			states: StateSpace::new(board.clone()),

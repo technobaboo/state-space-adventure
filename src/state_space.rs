@@ -73,7 +73,7 @@ impl StateSpace {
 	pub fn add(&mut self, board: &Board, block: &Block) {
 		let hash = board.board_hash();
 		if let Some(&idx) = self.map.get(&hash) {
-			self.link_to_node(idx, EdgeData(block.color));
+			self.link_to_node(idx, EdgeData(block.display_color()));
 			return;
 		}
 
@@ -92,7 +92,7 @@ impl StateSpace {
 			node: board.clone(),
 		});
 		self.map.insert(hash, idx);
-		self.link_to_node(idx, EdgeData(block.color));
+		self.link_to_node(idx, EdgeData(block.display_color()));
 	}
 	fn link_to_node(&mut self, node: NodeIndex, data: EdgeData) {
 		if self.current != node && !self.states.contains_edge(self.current, node) {
@@ -200,14 +200,8 @@ impl Reify for StateSpace {
 						Lines::new(chunk.filter_map(|e| {
 							Some(
 								line_from_points(vec![
-									self.states
-										.node_weight(e.source())?
-										.pos
-										.clamp_length_max(10.0),
-									self.states
-										.node_weight(e.target())?
-										.pos
-										.clamp_length_max(10.0),
+									self.states.node_weight(e.source())?.pos,
+									self.states.node_weight(e.target())?.pos,
 								])
 								.thickness(0.001)
 								.color(e.weight().0),
@@ -218,13 +212,16 @@ impl Reify for StateSpace {
 			)
 			.children(
 				// nodes
-				(self.state_count() < 25)
+				(self.state_count() < 100)
 					.then(|| {
 						self.states
 							.node_references()
 							.map(|(idx, d)| {
 								Handle::new(d.pos, move |state: &mut Self, pos| {
-									state.states.node_weight_mut(idx).unwrap().pos = pos.into();
+									let Some(weight) = state.states.node_weight_mut(idx) else {
+										return;
+									};
+									weight.pos = pos.into();
 								})
 								.build()
 							})

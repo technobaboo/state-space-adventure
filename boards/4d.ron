@@ -1,0 +1,12 @@
+(
+    width: 5,
+    height: 5,
+    pinned: true,
+    blocks: [
+        // color: (r, g, b, a) (linear), top_left: (x, y)
+        (color: (0.9, 0.1, 0.6, 1.0), top_left: (0, 0), width: 1, height: 2), // magenta
+        (color: (0.5, 0.1, 0.9, 1.0), top_left: (1, 0), width: 1, height: 2), // purple
+        (color: (0.9, 0.2, 0.2, 1.0), top_left: (2, 0), width: 1, height: 2), // red
+        (color: (0.1, 0.9, 0.1, 1.0), top_left: (3, 0), width: 1, height: 2), // green
+    ],
+)
