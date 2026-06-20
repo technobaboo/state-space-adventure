@@ -135,7 +135,7 @@ impl StateSpace {
 			states,
 			settle_speed: 10.0,
 			cooloff_factor: 0.95,
-			scale: 0.01,
+			scale: 0.025,
 			theta: default_theta(),
 			max_speed: default_max_speed(),
 			mode: ExploreMode::default(),
