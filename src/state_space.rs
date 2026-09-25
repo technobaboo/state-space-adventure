@@ -119,6 +119,7 @@ fn default_max_speed() -> f32 {
 /// timestep, which would otherwise blow forces and velocities up in a single
 /// step.
 const MAX_DELTA: f32 = 1.0 / 30.0;
+pub const CURRENT_COLOR: Color = rgba_linear!(1.0, 0.0, 1.0, 1.0);
 impl StateSpace {
 	pub fn new(board: Board) -> Self {
 		let hash = board.board_hash();
@@ -315,13 +316,17 @@ impl StateSpace {
 		self.add_edge(self.current, idx, block.display_color());
 		self.current = idx;
 	}
-	/// jumps `current` to whichever state is nearest `p`
-	pub fn snap(&mut self, p: Vec3A) {
-		if let Some((idx, _)) = self.states.node_references().min_by(|(_, a), (_, b)| {
-			a.pos
-				.distance_squared(p)
-				.total_cmp(&b.pos.distance_squared(p))
-		}) {
+	/// the state nearest `p`, if it's within `reach`
+	pub fn nearest(&self, p: Vec3A, reach: f32) -> Option<(NodeIndex<u32>, Vec3A)> {
+		self.states
+			.node_references()
+			.map(|(idx, d)| (idx, d.pos))
+			.min_by(|(_, a), (_, b)| a.distance_squared(p).total_cmp(&b.distance_squared(p)))
+			.filter(|(_, pos)| pos.distance(p) <= reach)
+	}
+	/// jumps `current` to the state nearest `p`, if it's within `reach`
+	pub fn snap(&mut self, p: Vec3A, reach: f32) {
+		if let Some((idx, _)) = self.nearest(p, reach) {
 			self.current = idx;
 		}
 	}
@@ -423,7 +428,7 @@ impl Reify for StateSpace {
 				Lines::new(
 					shape(Shape::Sphere { radius: 0.001 })
 						.into_iter()
-						.map(|l| l.thickness(0.01).color(rgba_linear!(1.0, 0.0, 1.0, 1.0))),
+						.map(|l| l.thickness(0.01).color(CURRENT_COLOR)),
 				)
 				.pos(self.states.node_weight(self.current).unwrap().pos)
 				.build(),

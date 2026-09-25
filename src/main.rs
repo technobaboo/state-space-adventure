@@ -3,7 +3,9 @@ use glam::{Quat, Vec3, Vec3A};
 use mint::{Quaternion, Vector3};
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
-	elements::{rgba_linear, shape, Dial, LineExt, Lines, Pen, PenState, Spatial, Text},
+	elements::{
+		line_from_points, rgba_linear, shape, Dial, LineExt, Lines, Pen, PenState, Spatial, Text,
+	},
 	project_local_resources, ClientState, Context, CustomElement, Element, FrameWarning, Migrate,
 	Reify, Tasker, Transformable,
 };
@@ -12,7 +14,7 @@ use stardust_xr_fusion::{
 	drawable::YAlign,
 	fields::{CubicBezierControlPoint, Shape},
 };
-use state_space::StateSpace;
+use state_space::{StateSpace, CURRENT_COLOR};
 
 mod board;
 mod octree;
@@ -38,6 +40,7 @@ pub struct State {
 }
 const PEN_LENGTH: f32 = 0.075;
 const FISHING_LINE_PIECES: usize = 6;
+const PEN_REACH: f32 = 0.05;
 fn pen_home() -> Vector3<f32> {
 	[-0.015, -0.075, 0.0].into()
 }
@@ -170,7 +173,7 @@ impl Reify for State {
 							_ => (pos, rot),
 						};
 						if let PenState::StartedDrawing(_) | PenState::Drawing(_) = pen {
-							state.states.snap(Vec3A::from(pos));
+							state.states.snap(Vec3A::from(pos), PEN_REACH);
 						}
 					},
 				)
@@ -178,6 +181,16 @@ impl Reify for State {
 				.build(),
 			)
 			.child(self.fishing_line())
+			.maybe_child(
+				self.states
+					.nearest(Vec3A::from(self.pen_pos), PEN_REACH)
+					.map(|(_, target)| {
+						Lines::new([line_from_points(vec![Vec3A::from(self.pen_pos), target])
+							.thickness(0.0005)
+							.color(CURRENT_COLOR)])
+						.build()
+					}),
+			)
 			.maybe_child(self.frame_warning.danger().then(|| {
 				let (delta, real_delta) = self.frame_warning.times();
 				Text::new(format!(
