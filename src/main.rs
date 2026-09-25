@@ -1,13 +1,17 @@
 use board::Board;
-use glam::{Quat, Vec3A};
+use glam::{Quat, Vec3, Vec3A};
 use mint::{Quaternion, Vector3};
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
-	elements::{rgba_linear, Dial, Pen, PenState, Spatial, Text},
+	elements::{rgba_linear, shape, Dial, LineExt, Lines, Pen, PenState, Spatial, Text},
 	project_local_resources, ClientState, Context, CustomElement, Element, FrameWarning, Migrate,
 	Reify, Tasker, Transformable,
 };
-use stardust_xr_fusion::{client::FrameInfo, drawable::YAlign};
+use stardust_xr_fusion::{
+	client::FrameInfo,
+	drawable::YAlign,
+	fields::{CubicBezierControlPoint, Shape},
+};
 use state_space::StateSpace;
 
 mod board;
@@ -32,6 +36,8 @@ pub struct State {
 	#[serde(skip, default = "pen_rot")]
 	pen_rot: Quaternion<f32>,
 }
+const PEN_LENGTH: f32 = 0.075;
+const FISHING_LINE_PIECES: usize = 6;
 fn pen_home() -> Vector3<f32> {
 	[-0.015, -0.075, 0.0].into()
 }
@@ -72,6 +78,47 @@ impl ClientState for State {
 		self.states.force_direct(info);
 
 		self.frame_warning.update(info);
+	}
+}
+impl State {
+	/// leaves the pen along its shaft and drops into the board from above
+	fn fishing_line(&self) -> impl Element<Self> {
+		let up = Quat::from(self.pen_rot) * Vec3::Y;
+		let tail = Vec3::from(self.pen_pos) + up * PEN_LENGTH;
+		let top = self.states.board().top();
+		let slack = tail.distance(top) * 0.5;
+		let [p0, p1, p2, p3] = [tail, tail + up * slack, top + Vec3::Y * slack, top];
+		// molecules only samples 8 segments per curve, so split it into pieces that
+		// trace the exact same curve
+		let points = (0..=FISHING_LINE_PIECES)
+			.map(|i| {
+				let t = i as f32 / FISHING_LINE_PIECES as f32;
+				let mt = 1.0 - t;
+				let anchor = mt * mt * mt * p0
+					+ 3.0 * mt * mt * t * p1
+					+ 3.0 * mt * t * t * p2
+					+ t * t * t * p3;
+				let d = (3.0 * mt * mt * (p1 - p0)
+					+ 6.0 * mt * t * (p2 - p1)
+					+ 3.0 * t * t * (p3 - p2))
+					/ (3.0 * FISHING_LINE_PIECES as f32);
+				CubicBezierControlPoint {
+					handle_in: (anchor - d).into(),
+					anchor: anchor.into(),
+					handle_out: (anchor + d).into(),
+					thickness: 0.0,
+				}
+			})
+			.collect();
+		Lines::new(
+			shape(Shape::CubicBezierSpline {
+				points,
+				cyclic: false,
+			})
+			.into_iter()
+			.map(|l| l.thickness(0.0005).color(rgba_linear!(1.0, 1.0, 1.0, 0.25))),
+		)
+		.build()
 	}
 }
 impl Reify for State {
@@ -127,8 +174,10 @@ impl Reify for State {
 						}
 					},
 				)
+				.length(PEN_LENGTH)
 				.build(),
 			)
+			.child(self.fishing_line())
 			.maybe_child(self.frame_warning.danger().then(|| {
 				let (delta, real_delta) = self.frame_warning.times();
 				Text::new(format!(

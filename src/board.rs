@@ -1,4 +1,4 @@
-use glam::{vec3, Mat4};
+use glam::{vec3, Mat4, Vec3};
 use mint::{Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
@@ -286,6 +286,10 @@ const PADDING: f32 = 0.0025;
 impl Board {
 	/// the board doesn't own any state, dragging a block hands it back to
 	/// whoever does
+	pub fn top(&self) -> Vec3 {
+		vec3(self.width as f32 * CELL_SIZE / 2.0, PADDING, 0.0)
+	}
+
 	pub fn view<S: ValidState>(
 		&self,
 		drag: impl Fn(&mut S, usize, Vector3<f32>) + Clone + Send + Sync + 'static,
