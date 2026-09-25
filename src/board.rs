@@ -186,7 +186,12 @@ impl Board {
 	}
 
 	/// Move the block at the given index if valid.
-	pub fn move_block(&mut self, index: usize, delta_x: isize, delta_y: isize) -> Result<(), String> {
+	pub fn move_block(
+		&mut self,
+		index: usize,
+		delta_x: isize,
+		delta_y: isize,
+	) -> Result<(), String> {
 		if !self.can_move(index, delta_x, delta_y) {
 			return Err(format!("Invalid move for block {index}"));
 		}
@@ -257,7 +262,12 @@ const CELL_SIZE: f32 = 0.02;
 const PADDING: f32 = 0.0025;
 
 impl Reify for Board {
-	fn reify(&self, _context: &Context, _tasks: impl Tasker<Self>) -> impl Element<Self> {
+	fn reify(
+		&self,
+		_context: &Context,
+		_tasks: impl Tasker<Self>,
+		_props: (),
+	) -> impl Element<Self> {
 		Self::rectangle_lines(
 			[0; 2].into(),
 			self.width,

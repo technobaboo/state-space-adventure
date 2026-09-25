@@ -16,9 +16,13 @@ serde_ron = "1.0.0"
 tokio = { version = "*", features = ["rt", "tokio-macros", "sync"] }
 
 [dependencies.stardust-xr-fusion]
+version = "0.52.1"
 git = "https://github.com/StardustXR/core.git"
-branch = "binder"
 
 [dependencies.stardust-xr-asteroids]
 git = "https://github.com/StardustXR/asteroids.git"
-branch = "binder"
+
+[patch.crates-io]
+stardust-xr-fusion = { git = "https://github.com/StardustXR/core.git" }
+stardust-xr-protocol = { git = "https://github.com/StardustXR/core.git" }
+stardust-xr-molecules = { git = "https://github.com/StardustXR/molecules.git" }

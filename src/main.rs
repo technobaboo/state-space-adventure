@@ -68,18 +68,20 @@ impl ClientState for State {
 	}
 }
 impl Reify for State {
-	fn reify(&self, context: &Context, tasks: impl Tasker<Self>) -> impl Element<Self> {
+	fn reify(&self, context: &Context, tasks: impl Tasker<Self>, _props: ()) -> impl Element<Self> {
 		Spatial::default()
 			.build()
 			.child(
 				self.board
-					.reify_substate(context, tasks.clone(), |state: &mut Self| {
+					.reify_substate(context, tasks.clone(), (), |state: &mut Self| {
 						Some(&mut state.board)
 					}),
 			)
 			.child(
 				self.states
-					.reify_substate(context, tasks, |state: &mut Self| Some(&mut state.states)),
+					.reify_substate(context, tasks, (), |state: &mut Self| {
+						Some(&mut state.states)
+					}),
 			)
 			.child(
 				Text::new(format!(

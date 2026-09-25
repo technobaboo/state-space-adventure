@@ -374,7 +374,12 @@ impl StateSpace {
 	}
 }
 impl Reify for StateSpace {
-	fn reify(&self, _context: &Context, _tasks: impl Tasker<Self>) -> impl Element<Self> {
+	fn reify(
+		&self,
+		_context: &Context,
+		_tasks: impl Tasker<Self>,
+		_props: (),
+	) -> impl Element<Self> {
 		Spatial::default()
 			.build()
 			.child(
