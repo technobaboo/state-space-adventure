@@ -1,9 +1,9 @@
 use glam::{vec3, Mat4};
-use mint::Vector2;
+use mint::{Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
-	elements::{LineExt, Lines},
-	Context, CustomElement, Element, Reify, Tasker, Transformable,
+	elements::{Handle, LineExt, Lines},
+	CustomElement, Element, Transformable, ValidState,
 };
 use stardust_xr_fusion::{
 	drawable::{Line, LinePoint},
@@ -200,6 +200,28 @@ impl Board {
 		Ok(())
 	}
 
+	/// the board after sliding the block one cell toward wherever it's being
+	/// dragged, so every change is a single move in the state space
+	pub fn dragged(&self, index: usize, pos: Vector3<f32>) -> Option<(Block, Board)> {
+		let b = &self.blocks[index];
+		let dx =
+			(pos.x / CELL_SIZE - b.width as f32 / 2.0).round() as isize - b.top_left.x as isize;
+		let dy =
+			(-pos.y / CELL_SIZE - b.height as f32 / 2.0).round() as isize - b.top_left.y as isize;
+		let (sx, sy) = (dx.signum(), dy.signum());
+		let order = if dx.abs() >= dy.abs() {
+			[(sx, 0), (0, sy)]
+		} else {
+			[(0, sy), (sx, 0)]
+		};
+		let (x, y) = order
+			.into_iter()
+			.find(|&(x, y)| (x, y) != (0, 0) && self.can_move(index, x, y))?;
+		let mut next = self.clone();
+		next.move_block(index, x, y).unwrap();
+		Some((next.blocks[index].clone(), next))
+	}
+
 	/// Example: Check if the board is solved given a target block and goal cell.
 	pub fn is_solved(&self, target_index: usize, goal_cell: Cell) -> bool {
 		self.blocks
@@ -261,13 +283,13 @@ impl Board {
 const CELL_SIZE: f32 = 0.02;
 const PADDING: f32 = 0.0025;
 
-impl Reify for Board {
-	fn reify(
+impl Board {
+	/// the board doesn't own any state, dragging a block hands it back to
+	/// whoever does
+	pub fn view<S: ValidState>(
 		&self,
-		_context: &Context,
-		_tasks: impl Tasker<Self>,
-		_props: (),
-	) -> impl Element<Self> {
+		drag: impl Fn(&mut S, usize, Vector3<f32>) + Clone + Send + Sync + 'static,
+	) -> impl Element<S> {
 		Self::rectangle_lines(
 			[0; 2].into(),
 			self.width,
@@ -278,6 +300,20 @@ impl Reify for Board {
 		.build()
 		.children(self.blocks.iter().map(|b| {
 			Self::rectangle_lines(b.top_left, b.width, b.height, PADDING, b.display_color()).build()
+		}))
+		.children(self.blocks.iter().enumerate().map(|(i, b)| {
+			Handle::new(
+				[
+					(b.top_left.x as f32 + b.width as f32 / 2.0) * CELL_SIZE,
+					-(b.top_left.y as f32 + b.height as f32 / 2.0) * CELL_SIZE,
+					0.0,
+				],
+				{
+					let drag = drag.clone();
+					move |state: &mut S, pos| drag(state, i, pos)
+				},
+			)
+			.build()
 		}))
 	}
 }

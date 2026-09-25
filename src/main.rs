@@ -1,7 +1,9 @@
 use board::Board;
+use glam::{Quat, Vec3A};
+use mint::{Quaternion, Vector3};
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
-	elements::{rgba_linear, Dial, Spatial, Text},
+	elements::{rgba_linear, Dial, Pen, PenState, Spatial, Text},
 	project_local_resources, ClientState, Context, CustomElement, Element, FrameWarning, Migrate,
 	Reify, Tasker, Transformable,
 };
@@ -21,10 +23,20 @@ async fn main() {
 
 #[derive(Serialize, Deserialize)] // Defining variables used in client
 pub struct State {
-	board: Board,
 	states: StateSpace,
 	#[serde(skip)]
 	frame_warning: FrameWarning,
+
+	#[serde(skip, default = "pen_home")]
+	pen_pos: Vector3<f32>,
+	#[serde(skip, default = "pen_rot")]
+	pen_rot: Quaternion<f32>,
+}
+fn pen_home() -> Vector3<f32> {
+	[-0.015, -0.075, 0.0].into()
+}
+fn pen_rot() -> Quaternion<f32> {
+	Quat::IDENTITY.into()
 }
 /// Path used when no board file is passed as an argument.
 const DEFAULT_BOARD_PATH: &str = "boards/default.ron";
@@ -40,12 +52,11 @@ fn load_board() -> Board {
 
 impl Default for State {
 	fn default() -> Self {
-		let board = load_board();
-
 		Self {
-			states: StateSpace::new(board.clone()),
-			board,
+			states: StateSpace::new(load_board()),
 			frame_warning: FrameWarning::default(),
+			pen_pos: pen_home(),
+			pen_rot: pen_rot(),
 		}
 	}
 }
@@ -57,11 +68,7 @@ impl ClientState for State {
 	const APP_ID: &'static str = "technobaboo.StateSpaceAdventure";
 
 	fn on_frame(&mut self, info: &FrameInfo) {
-		// Expand the next state in the frontier; mirror it onto the displayed
-		// board so the klotski view tracks whatever state is being explored.
-		if let Some(board) = self.states.explore() {
-			self.board = board;
-		}
+		self.states.explore();
 		self.states.force_direct(info);
 
 		self.frame_warning.update(info);
@@ -72,10 +79,9 @@ impl Reify for State {
 		Spatial::default()
 			.build()
 			.child(
-				self.board
-					.reify_substate(context, tasks.clone(), (), |state: &mut Self| {
-						Some(&mut state.board)
-					}),
+				self.states
+					.board()
+					.view(|state: &mut Self, i, pos| state.states.drag(i, pos)),
 			)
 			.child(
 				self.states
@@ -106,6 +112,22 @@ impl Reify for State {
 						.character_height(0.005)
 						.build(),
 				),
+			)
+			.child(
+				Pen::new(
+					self.pen_pos,
+					self.pen_rot,
+					|state: &mut Self, pen, pos, rot| {
+						(state.pen_pos, state.pen_rot) = match pen {
+							PenState::Floating => (pen_home(), pen_rot()),
+							_ => (pos, rot),
+						};
+						if let PenState::StartedDrawing(_) | PenState::Drawing(_) = pen {
+							state.states.snap(Vec3A::from(pos));
+						}
+					},
+				)
+				.build(),
 			)
 			.maybe_child(self.frame_warning.danger().then(|| {
 				let (delta, real_delta) = self.frame_warning.times();

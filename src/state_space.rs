@@ -2,6 +2,7 @@ use crate::board::Board;
 use crate::octree::Octree;
 use glam::{vec3a, Vec3A};
 use itertools::Itertools;
+use mint::Vector3;
 use petgraph::{
 	graph::NodeIndex,
 	prelude::StableUnGraph,
@@ -65,6 +66,10 @@ pub struct EdgeData(Color);
 #[derive(Clone, Serialize, Deserialize)]
 pub struct StateSpace {
 	current: NodeIndex<u32>,
+	/// where the explorer is in its walk, separate from `current` so exploring
+	/// doesn't yank the board out from under your hands
+	#[serde(default)]
+	cursor: NodeIndex<u32>,
 	map: HashMap<u64, NodeIndex<u32>>,
 	states: StableUnGraph<NodeData<Board>, EdgeData>,
 
@@ -131,6 +136,7 @@ impl StateSpace {
 		map.insert(hash, idx);
 		StateSpace {
 			current: idx,
+			cursor: idx,
 			map,
 			states,
 			settle_speed: 10.0,
@@ -155,44 +161,44 @@ impl StateSpace {
 
 	/// Depth-first walk of the reachable state space, one step per call.
 	///
-	/// At [`Self::current`] we look at every board reachable in a single move:
+	/// At [`Self::cursor`] we look at every board reachable in a single move:
 	/// newly-discovered ones get added to the graph and wired up with an edge,
 	/// already-known ones just get the edge (so no move is ever dropped, even
 	/// the ones that loop back to a state we've already visited). The moment we
 	/// find a genuinely new state we step into it and return. If every neighbor
-	/// of `current` is already known, we've exhausted this branch, so we back
+	/// of `cursor` is already known, we've exhausted this branch, so we back
 	/// out along the parent pointer recorded when we first stepped into it and
 	/// try again from there.
 	///
 	/// Unlike a separately-tracked frontier queue, the only state this needs —
-	/// `current`, plus each node's `parent` — already lives in the graph itself,
+	/// `cursor`, plus each node's `parent` — already lives in the graph itself,
 	/// so there's nothing extra that can fall out of sync with it. Returns the
 	/// board we just stepped into, or `None` once we've backtracked all the way
 	/// to the root with nowhere left to go.
 	fn explore_dfs(&mut self) -> Option<Board> {
 		loop {
-			let board = self.states.node_weight(self.current).unwrap().node.clone();
+			let board = self.states.node_weight(self.cursor).unwrap().node.clone();
 			let mut stepped_into = None;
 
 			for (block, next) in board.neighbors() {
 				let hash = next.board_hash();
 				let discovered = self.map.contains_key(&hash);
-				let depth = self.states.node_weight(self.current).unwrap().depth;
-				let neighbor = self.ensure_node(next, hash, depth + 1);
-				self.add_edge(self.current, neighbor, block.display_color());
+				let depth = self.states.node_weight(self.cursor).unwrap().depth;
+				let neighbor = self.ensure_node(next, hash, depth + 1, self.cursor);
+				self.add_edge(self.cursor, neighbor, block.display_color());
 				if !discovered {
-					self.states.node_weight_mut(neighbor).unwrap().parent = Some(self.current);
+					self.states.node_weight_mut(neighbor).unwrap().parent = Some(self.cursor);
 					stepped_into = Some(neighbor);
 					break;
 				}
 			}
 
 			if let Some(neighbor) = stepped_into {
-				self.current = neighbor;
+				self.cursor = neighbor;
 				return Some(self.states.node_weight(neighbor).unwrap().node.clone());
 			}
 
-			self.current = self.states.node_weight(self.current).unwrap().parent?;
+			self.cursor = self.states.node_weight(self.cursor).unwrap().parent?;
 		}
 	}
 
@@ -219,14 +225,14 @@ impl StateSpace {
 			if node.bfs_expanded {
 				continue;
 			}
-			self.current = idx;
+			self.cursor = idx;
 			let board = node.node.clone();
 			let depth = node.depth;
 
 			for (block, next) in board.neighbors() {
 				let hash = next.board_hash();
 				let discovered = self.map.contains_key(&hash);
-				let neighbor = self.ensure_node(next, hash, depth + 1);
+				let neighbor = self.ensure_node(next, hash, depth + 1, self.cursor);
 				self.add_edge(idx, neighbor, block.display_color());
 				if !discovered {
 					self.bfs_frontier.push_back(neighbor);
@@ -254,15 +260,21 @@ impl StateSpace {
 		true
 	}
 
-	/// Returns the node for `board`, inserting it (positioned just off the
-	/// current node) if it isn't already in the graph.
-	fn ensure_node(&mut self, board: Board, hash: u64, depth: u32) -> NodeIndex<u32> {
+	/// Returns the node for `board`, inserting it (positioned just off
+	/// `near`) if it isn't already in the graph.
+	fn ensure_node(
+		&mut self,
+		board: Board,
+		hash: u64,
+		depth: u32,
+		near: NodeIndex<u32>,
+	) -> NodeIndex<u32> {
 		if let Some(&idx) = self.map.get(&hash) {
 			return idx;
 		}
 
 		let mut rng = rng();
-		let current_pos = self.states.node_weight(self.current).unwrap().pos;
+		let current_pos = self.states.node_weight(near).unwrap().pos;
 		let idx = self.states.add_node(NodeData {
 			pos: current_pos
 				+ (vec3a(
@@ -286,6 +298,31 @@ impl StateSpace {
 	fn add_edge(&mut self, a: NodeIndex<u32>, b: NodeIndex<u32>, color: Color) {
 		if a != b && !self.states.contains_edge(a, b) {
 			self.states.add_edge(a, b, EdgeData(color));
+		}
+	}
+	pub fn board(&self) -> &Board {
+		&self.states[self.current].node
+	}
+	/// slides a block on the current board, stepping `current` along that move's edge
+	pub fn drag(&mut self, index: usize, pos: Vector3<f32>) {
+		let cur = &self.states[self.current];
+		let Some((block, next)) = cur.node.dragged(index, pos) else {
+			return;
+		};
+		let depth = cur.depth + 1;
+		let hash = next.board_hash();
+		let idx = self.ensure_node(next, hash, depth, self.current);
+		self.add_edge(self.current, idx, block.display_color());
+		self.current = idx;
+	}
+	/// jumps `current` to whichever state is nearest `p`
+	pub fn snap(&mut self, p: Vec3A) {
+		if let Some((idx, _)) = self.states.node_references().min_by(|(_, a), (_, b)| {
+			a.pos
+				.distance_squared(p)
+				.total_cmp(&b.pos.distance_squared(p))
+		}) {
+			self.current = idx;
 		}
 	}
 	pub fn state_count(&self) -> usize {
