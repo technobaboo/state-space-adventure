@@ -12,7 +12,6 @@ use rand::{rng, Rng};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
-	ease_in_out,
 	elements::{line_from_points, shape, Handle, LineExt, Lines, Spatial},
 	spring, Context, CustomElement, Element, Reify, Tasker, Transformable,
 };

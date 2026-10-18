@@ -6,8 +6,8 @@ use stardust_xr_asteroids::{
 	elements::{
 		line_from_points, rgba_linear, shape, Dial, LineExt, Lines, Pen, PenState, Spatial, Text,
 	},
-	project_local_resources, ClientState, Context, CustomElement, Element, FrameWarning, Migrate,
-	Reify, Tasker, Transformable,
+	project_local_resources, ClientState, Context, CustomElement, Element, Migrate, Reify, Tasker,
+	Transformable,
 };
 use stardust_xr_fusion::{
 	client::FrameInfo,
@@ -30,8 +30,6 @@ async fn main() {
 #[derive(Serialize, Deserialize)] // Defining variables used in client
 pub struct State {
 	states: StateSpace,
-	#[serde(skip)]
-	frame_warning: FrameWarning,
 
 	#[serde(skip, default = "pen_home")]
 	pen_pos: Vector3<f32>,
@@ -63,7 +61,6 @@ impl Default for State {
 	fn default() -> Self {
 		Self {
 			states: StateSpace::new(load_board()),
-			frame_warning: FrameWarning::default(),
 			pen_pos: pen_home(),
 			pen_rot: pen_rot(),
 		}
@@ -79,8 +76,6 @@ impl ClientState for State {
 	fn on_frame(&mut self, info: &FrameInfo) {
 		self.states.explore();
 		self.states.force_direct(info);
-
-		self.frame_warning.update(info);
 	}
 }
 impl State {
@@ -191,19 +186,5 @@ impl Reify for State {
 						.build()
 					}),
 			)
-			.maybe_child(self.frame_warning.danger().then(|| {
-				let (delta, real_delta) = self.frame_warning.times();
-				Text::new(format!(
-					"frametime suuucks: {:.2}ms server vs {:.2}ms client",
-					delta * 1000.0,
-					real_delta * 1000.0
-				))
-				.align_y(YAlign::Top)
-				.color(rgba_linear!(0.75, 0.1, 0.1, 1.0))
-				.pos([-0.02, 0.0, 0.0])
-				.rot(glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2))
-				.character_height(0.005)
-				.build()
-			}))
 	}
 }
