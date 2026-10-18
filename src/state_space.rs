@@ -12,8 +12,9 @@ use rand::{rng, Rng};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
+	ease_in_out,
 	elements::{line_from_points, shape, Handle, LineExt, Lines, Spatial},
-	Context, CustomElement, Element, Reify, Tasker, Transformable,
+	spring, Context, CustomElement, Element, Reify, Tasker, Transformable,
 };
 use stardust_xr_fusion::{
 	client::FrameInfo,
@@ -431,7 +432,8 @@ impl Reify for StateSpace {
 						.map(|l| l.thickness(0.01).color(CURRENT_COLOR)),
 				)
 				.pos(self.states.node_weight(self.current).unwrap().pos)
-				.build(),
+				.build()
+				.animation(|a| a.transform(spring(0.1, 0.0))),
 			)
 			.children(
 				// edges

@@ -594,19 +594,8 @@ checksum = "899def5c37c4fd7b2664648c28120ecec138e4d395b459e5ca34f9cce2dd77fd"
 dependencies = [
  "cfg-if",
  "libc",
- "r-efi 5.3.0",
+ "r-efi",
  "wasip2",
-]
-
-[[package]]
-name = "getrandom"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099"
-dependencies = [
- "cfg-if",
- "libc",
- "r-efi 6.0.0",
 ]
 
 [[package]]
@@ -621,9 +610,9 @@ dependencies = [
 
 [[package]]
 name = "gluon-ipc"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f675d21faef003c3d18cbf743ef85c82aea2956e88b9eb1472c2d6497966a5ed"
+checksum = "9f678c9eb6a669631f143f944bd24720a06a263086b757135b3d4c4f10a1730e"
 dependencies = [
  "bitflags",
  "gluon-ipc-derive",
@@ -635,9 +624,9 @@ dependencies = [
 
 [[package]]
 name = "gluon-ipc-codegen"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2878da5a9d216cf7dcd2115dac82292dfe8f5831623b32b5e9f6e6ac338b0425"
+checksum = "4ad349441f18dcf4d4fb487eef89e261c9a5f1d1e3166811a846dcf936a6076d"
 dependencies = [
  "convert_case",
  "gluon-ipc",
@@ -650,9 +639,9 @@ dependencies = [
 
 [[package]]
 name = "gluon-ipc-derive"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "358b64f3d11ebc2143f3d403f1675f55f11f7cd56ebc341bd017f808c5d822f2"
+checksum = "74ed802cf2a46b8a9644dd4f6d3dc29dc8c01658e73b11b5955371105d6255d5"
 dependencies = [
  "quote",
  "syn 2.0.119",
@@ -660,9 +649,9 @@ dependencies = [
 
 [[package]]
 name = "gluon-ipc-parser"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "751bfc0ec65269173abbc479af93f4c706cd091e1880fde269afdc31bb5eaa43"
+checksum = "5a91d064e854bfd84a829b6d863cbae9173521e46d18ed42db23c3b6a01f2ae2"
 dependencies = [
  "ansi_term",
  "chumsky",
@@ -1076,12 +1065,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
 
 [[package]]
-name = "r-efi"
-version = "6.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
-
-[[package]]
 name = "rand"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1107,7 +1090,7 @@ version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c"
 dependencies = [
- "getrandom 0.3.4",
+ "getrandom",
 ]
 
 [[package]]
@@ -1340,8 +1323,8 @@ dependencies = [
 
 [[package]]
 name = "stardust-xr-asteroids"
-version = "0.52.0"
-source = "git+https://github.com/StardustXR/asteroids.git#944fc4c56d5a296a3db9edd88d290081bc854a8d"
+version = "0.53.0-rc.1"
+source = "git+https://github.com/StardustXR/asteroids.git#6988d08c86908351e768378e1c302196d7a216d4"
 dependencies = [
  "bumpalo",
  "derive-where",
@@ -1358,6 +1341,7 @@ dependencies = [
  "ron 0.11.0",
  "rustc-hash",
  "serde",
+ "stardust-xr-asteroids-derive",
  "stardust-xr-fusion",
  "stardust-xr-molecules",
  "tokio",
@@ -1366,9 +1350,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "stardust-xr-asteroids-derive"
+version = "0.53.0-rc.1"
+source = "git+https://github.com/StardustXR/asteroids.git#6988d08c86908351e768378e1c302196d7a216d4"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "stardust-xr-fusion"
-version = "0.52.1"
-source = "git+https://github.com/StardustXR/core.git#6d666ab6f9035975b8a5e02ae566014441c92db8"
+version = "0.53.0-rc.1"
+source = "git+https://github.com/StardustXR/core.git#36b1248f077abda4a74a8c14fa02a1dc76a575e0"
 dependencies = [
  "glam",
  "gluon-ipc",
@@ -1383,8 +1377,8 @@ dependencies = [
 
 [[package]]
 name = "stardust-xr-molecules"
-version = "0.52.0"
-source = "git+https://github.com/StardustXR/molecules.git#8662b856a5535e5155c9a32800235aea2389d2e9"
+version = "0.53.0-rc.1"
+source = "git+https://github.com/StardustXR/molecules.git#f78b0980685391b4417787cac916bb1175d829a1"
 dependencies = [
  "futures",
  "glam",
@@ -1404,8 +1398,8 @@ dependencies = [
 
 [[package]]
 name = "stardust-xr-molecules-protocols"
-version = "0.52.0"
-source = "git+https://github.com/StardustXR/molecules.git#8662b856a5535e5155c9a32800235aea2389d2e9"
+version = "0.53.0-rc.1"
+source = "git+https://github.com/StardustXR/molecules.git#f78b0980685391b4417787cac916bb1175d829a1"
 dependencies = [
  "gluon-ipc",
  "gluon-ipc-codegen",
@@ -1415,8 +1409,8 @@ dependencies = [
 
 [[package]]
 name = "stardust-xr-protocol"
-version = "0.52.1"
-source = "git+https://github.com/StardustXR/core.git#6d666ab6f9035975b8a5e02ae566014441c92db8"
+version = "0.53.0-rc.1"
+source = "git+https://github.com/StardustXR/core.git#36b1248f077abda4a74a8c14fa02a1dc76a575e0"
 dependencies = [
  "fnv",
  "glam",
@@ -1506,7 +1500,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom",
  "once_cell",
  "rustix",
  "windows-sys",

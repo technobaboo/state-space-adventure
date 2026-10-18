@@ -3,10 +3,11 @@ use mint::{Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
 	elements::{Handle, LineExt, Lines},
-	CustomElement, Element, Transformable, ValidState,
+	spring, CustomElement, Element, Transformable, ValidState,
 };
 use stardust_xr_fusion::{
 	drawable::{Line, LinePoint},
+	spatial::Transform,
 	types::{rgba_linear, Color},
 };
 use std::{
@@ -303,7 +304,10 @@ impl Board {
 		)
 		.build()
 		.children(self.blocks.iter().map(|b| {
-			Self::rectangle_lines(b.top_left, b.width, b.height, PADDING, b.display_color()).build()
+			Self::rectangle_lines(b.top_left, b.width, b.height, PADDING, b.display_color())
+				.build()
+				.animation(|a| a.transform(spring(0.1, 0.0)))
+				.appear(|a| a.transform(Transform::from_scale([0.0; 3]), spring(0.5, 0.0)))
 		}))
 		.children(self.blocks.iter().enumerate().map(|(i, b)| {
 			Handle::new(
@@ -318,6 +322,7 @@ impl Board {
 				},
 			)
 			.build()
+			.animation(|a| a.root_pos(spring(0.1, 0.0)))
 		}))
 	}
 }
