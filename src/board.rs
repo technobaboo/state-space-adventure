@@ -295,6 +295,7 @@ impl Board {
 		&self,
 		drag: impl Fn(&mut S, usize, Vector3<f32>) + Clone + Send + Sync + 'static,
 	) -> impl Element<S> {
+		// main board outline
 		Self::rectangle_lines(
 			[0; 2].into(),
 			self.width,
@@ -303,12 +304,31 @@ impl Board {
 			rgba_linear!(1.0, 1.0, 1.0, 1.0),
 		)
 		.build()
+		// pins
+		.children(self.pinned.then(|| {
+			let s = PADDING * 0.5;
+			Lines::new((1..self.height).flat_map(|y| {
+				(1..self.width).map(move |x| {
+					rectangle(s, s)
+						.thickness(0.001)
+						.color(rgba_linear!(1.0, 1.0, 1.0, 1.0))
+						.transform(Mat4::from_translation(vec3(
+							x as f32 * CELL_SIZE - (PADDING * 0.25),
+							-(y as f32 * CELL_SIZE) + (PADDING * 0.25),
+							0.0,
+						)))
+				})
+			}))
+			.build()
+		}))
+		// blocks
 		.children(self.blocks.iter().map(|b| {
 			Self::rectangle_lines(b.top_left, b.width, b.height, PADDING, b.display_color())
 				.build()
 				.animation(|a| a.transform(spring(0.1, 0.0)))
 				.appear(|a| a.transform(Transform::from_scale([0.0; 3]), spring(0.5, 0.0)))
 		}))
+		// block handles
 		.children(self.blocks.iter().enumerate().map(|(i, b)| {
 			Handle::new(
 				[
