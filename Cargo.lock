@@ -1324,7 +1324,7 @@ dependencies = [
 [[package]]
 name = "stardust-xr-asteroids"
 version = "0.53.0-rc.1"
-source = "git+https://github.com/StardustXR/asteroids.git#6988d08c86908351e768378e1c302196d7a216d4"
+source = "git+https://github.com/StardustXR/asteroids.git#a63d7404f7cd8387954154174970b49e6c817fab"
 dependencies = [
  "bumpalo",
  "derive-where",
@@ -1352,7 +1352,7 @@ dependencies = [
 [[package]]
 name = "stardust-xr-asteroids-derive"
 version = "0.53.0-rc.1"
-source = "git+https://github.com/StardustXR/asteroids.git#6988d08c86908351e768378e1c302196d7a216d4"
+source = "git+https://github.com/StardustXR/asteroids.git#a63d7404f7cd8387954154174970b49e6c817fab"
 dependencies = [
  "proc-macro2",
  "quote",
